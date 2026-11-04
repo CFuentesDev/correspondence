@@ -352,7 +352,8 @@ class correspondence_document(models.Model):
 
                     new_sequence = correlative_obj.last_sequence + 1
                     correlative_obj.last_sequence = new_sequence
-                    year = fields.Date.today().strftime('%y')
+                    doc_date = new_document.date or fields.Date.today()
+                    year = doc_date.strftime('%Y')
                     new_correlative = f"{department.correlative_prefix or 'S-PRE'}-{corr_type.prefix or ''}-{year}-{str(new_sequence).zfill(4)}"
 
             if new_correlative:
