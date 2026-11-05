@@ -41,8 +41,8 @@
         <!-- El espaciado superior respecto al cintillo es gobernado por margin_top=31 y header_spacing=26 en report.paperformat -->
         <!-- Footer personalizado de ancho completo (100% sangrado) con QR redondeado, Contacto y Redes Sociales -->
         <xpath expr="//div[contains(@class, 'footer') or contains(@t-attf-class, 'footer')]" position="replace">
-            <div t-attf-class="footer o_standard_footer o_company_#{company.id}_layout" style="margin: 0 !important; padding: 0 !important; width: 100% !important; position: relative; height: 135px; page-break-inside: avoid;">
-                <img src="/correspondence/static/src/img/footer.png" style="width: 100%; max-height: 120px; position: absolute; bottom: 0; left: 0; right: 0; margin: 0; padding: 0; display: block;" alt="Footer Image"/>
+            <div t-attf-class="footer o_standard_footer o_company_#{company.id}_layout" style="margin: 0 !important; padding: 0 !important; width: 100% !important; position: relative; height: 185px; page-break-inside: avoid;">
+                <img src="/correspondence/static/src/img/footer.png" style="width: 100%; height: 170px; max-height: 170px; position: absolute; bottom: 0; left: 0; right: 0; margin: 0; padding: 0; display: block;" alt="Footer Image"/>
                 <t t-set="qr_img" t-value="doc.get_qr_code_url() if doc else False"/>
                 
                 <!-- Tarjeta QR Minimalista con Bordes Redondeados (Esquina Izquierda: 6mm) -->
@@ -118,8 +118,8 @@
     <!--         PLANTILLA REUTILIZABLE PARA EL PIE DE PÁGINA CON QR         -->
     <!-- =================================================================== -->
     <template id="report_qr_footer">
-        <div class="footer" style="position: relative; width: 100%; height: 120px; margin: 0 !important; padding: 0 !important; page-break-inside: avoid;">
-            <img src="/correspondence/static/src/img/footer.png" style="width: 100%; max-height: 100px; position: absolute; bottom: 0; left: 0; right: 0; margin: 0; padding: 0; display: block;" alt="Footer Image"/>
+        <div class="footer" style="position: relative; width: 100%; height: 170px; margin: 0 !important; padding: 0 !important; page-break-inside: avoid;">
+            <img src="/correspondence/static/src/img/footer.png" style="width: 100%; height: 150px; max-height: 150px; position: absolute; bottom: 0; left: 0; right: 0; margin: 0; padding: 0; display: block;" alt="Footer Image"/>
             <t t-set="qr_img" t-value="doc.get_qr_code_url() if doc else False"/>
             
             <div t-if="qr_img" style="position: absolute; bottom: 8px; left: 6mm; z-index: 10; background-color: #ffffff; padding: 5px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.18);">
@@ -535,7 +535,7 @@
         <field name="format">Letter</field>
         <field name="orientation">Portrait</field>
         <field name="margin_top">31</field>
-        <field name="margin_bottom">36</field>
+        <field name="margin_bottom">46</field>
         <field name="margin_left">0</field>
         <field name="margin_right">0</field>
         <field name="header_line" eval="False"/>
@@ -549,7 +549,7 @@
         <field name="format">Legal</field>
         <field name="orientation">Portrait</field>
         <field name="margin_top">31</field>
-        <field name="margin_bottom">36</field>
+        <field name="margin_bottom">46</field>
         <field name="margin_left">0</field>
         <field name="margin_right">0</field>
         <field name="header_line" eval="False"/>
