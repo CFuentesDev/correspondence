@@ -16,7 +16,7 @@
                         box-sizing: border-box !important;
                     }
                 </style>
-                <div class="d-flex justify-content-between align-items-center" style="border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 0px; width: 100%;">
+                <div class="d-flex justify-content-between align-items-center" style="border: none; padding-bottom: 0px; margin-bottom: 0px; width: 100%;">
                     <div style="width: 45%;"> 
                         <img t-if="company.logo" t-att-src="image_data_uri(company.logo)" style="max-height: 75px;" alt="Ministerio Logo"/>
                         <img t-else="" src="/correspondence/static/src/img/logo-izquierda.png" style="max-height: 75px;" alt="Ministerio Logo"/>
@@ -28,7 +28,7 @@
                 </div>
             </div>
         </xpath>
-        <!-- El espaciado superior respecto al cintillo es gobernado por margin_top=42 y header_spacing=35 en report.paperformat -->
+        <!-- El espaciado superior respecto al cintillo es gobernado por margin_top=31 y header_spacing=26 en report.paperformat -->
         <!-- Footer personalizado de ancho completo (100% sangrado) con QR redondeado, Contacto y Redes Sociales -->
         <xpath expr="//div[contains(@class, 'footer') or contains(@t-attf-class, 'footer')]" position="replace">
             <div t-attf-class="footer o_standard_footer o_company_#{company.id}_layout" style="margin: 0 !important; padding: 0 !important; width: 100% !important; position: relative; height: 135px; page-break-inside: avoid;">
@@ -215,40 +215,50 @@
                     <t t-set="doc" t-value="doc.with_context(lang=doc.author_id.lang)"/>
                     <div class="page" style="font-family: 'Georama', Arial, sans-serif; font-size: 12pt; color: #000000; padding-left: 25.4mm !important; padding-right: 25.4mm !important; box-sizing: border-box !important;">
                         <!-- Correlativo -->
-                        <p style="font-weight: bold; font-size: 14pt; color: #002060; margin-bottom: 15pt;">
+                        <p style="font-weight: bold; font-size: 14pt; color: #002060; margin-top: 0pt; margin-bottom: 4pt;">
                             <strong><span t-field="doc.correlative"/></strong>
                         </p>
 
                         <!-- Título -->
-                        <h3 class="text-center" style="font-weight: bold; text-decoration: underline; letter-spacing: 1px; margin-bottom: 20pt; font-size: 14pt; color: #002060;">
+                        <h3 class="text-center" style="font-weight: bold; text-decoration: underline; letter-spacing: 1px; margin-top: 0pt; margin-bottom: 8pt; font-size: 14pt; color: #002060;">
                             MEMORANDO
                         </h3>
 
-                        <!-- Tabla de Encabezado Box -->
-                        <table class="table table-bordered" style="width: 100%; border: 1px solid #000; margin-bottom: 25pt; border-collapse: collapse;">
+                        <!-- Tabla de Encabezado sin líneas de recuadro -->
+                        <table style="width: 100%; border: none !important; margin-bottom: 14pt; border-collapse: collapse;">
                             <tr>
-                                <td style="width: 15%; font-weight: bold; background-color: #f4f4f4; border: 1px solid #000; padding: 6px 10px; vertical-align: top; font-size: 12pt;">DE:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: 1px solid #000; padding: 6px 10px; font-size: 12pt;">
-                                    <span t-if="doc.send_department_id.manager_id" t-field="doc.send_department_id.manager_id.name"/><br/>
+                                <td style="width: 15%; font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">DE:</td>
+                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                                    <t t-if="doc.send_department_id.manager_id">
+                                        <span t-field="doc.send_department_id.manager_id.name"/><br/>
+                                    </t>
                                     <span t-if="doc.send_department_id.manager_id and doc.send_department_id.manager_id.job_id" t-field="doc.send_department_id.manager_id.job_id.name"/>
                                     <span t-else="" t-field="doc.send_department_id.name"/>
                                 </td>
                             </tr>
                             <tr>
-                                <td style="font-weight: bold; background-color: #f4f4f4; border: 1px solid #000; padding: 6px 10px; vertical-align: top; font-size: 12pt;">PARA:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: 1px solid #000; padding: 6px 10px; font-size: 12pt;">
-                                    <span t-out="', '.join(doc.recipient_department_ids.mapped('name'))"/>
+                                <td style="font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">PARA:</td>
+                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                                    <t t-foreach="doc.recipient_department_ids" t-as="r_dept">
+                                        <div t-att-style="'margin-bottom: 4px;' if not r_dept_last else ''">
+                                            <t t-if="r_dept.manager_id">
+                                                <span t-field="r_dept.manager_id.name"/><br/>
+                                            </t>
+                                            <span t-if="r_dept.manager_id and r_dept.manager_id.job_id" t-field="r_dept.manager_id.job_id.name"/>
+                                            <span t-else="" t-field="r_dept.name"/>
+                                        </div>
+                                    </t>
                                 </td>
                             </tr>
                             <tr>
-                                <td style="font-weight: bold; background-color: #f4f4f4; border: 1px solid #000; padding: 6px 10px; vertical-align: top; font-size: 12pt;">ASUNTO:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: 1px solid #000; padding: 6px 10px; font-size: 12pt;">
+                                <td style="font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">ASUNTO:</td>
+                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
                                     <span t-field="doc.name"/>
                                 </td>
                             </tr>
                             <tr>
-                                <td style="font-weight: bold; background-color: #f4f4f4; border: 1px solid #000; padding: 6px 10px; vertical-align: top; font-size: 12pt;">FECHA:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: 1px solid #000; padding: 6px 10px; font-size: 12pt;">
+                                <td style="font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">FECHA:</td>
+                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
                                     <span t-field="doc.date_formatted_spanish"/>
                                 </td>
                             </tr>
@@ -285,40 +295,53 @@
                     <t t-set="doc" t-value="doc.with_context(lang=doc.author_id.lang)"/>
                     <div class="page" style="font-family: 'Georama', Arial, sans-serif; font-size: 12pt; color: #000000; padding-left: 25.4mm !important; padding-right: 25.4mm !important; box-sizing: border-box !important;">
                         <!-- Correlativo -->
-                        <p style="font-weight: bold; font-size: 14pt; color: #002060; margin-bottom: 15pt;">
+                        <p style="font-weight: bold; font-size: 14pt; color: #002060; margin-top: 0pt; margin-bottom: 4pt;">
                             <strong><span t-field="doc.correlative"/></strong>
                         </p>
 
                         <!-- Título -->
-                        <h3 class="text-center" style="font-weight: bold; text-decoration: underline; letter-spacing: 1px; margin-bottom: 20pt; font-size: 14pt; color: #002060;">
+                        <h3 class="text-center" style="font-weight: bold; text-decoration: underline; letter-spacing: 1px; margin-top: 0pt; margin-bottom: 8pt; font-size: 14pt; color: #002060;">
                             CIRCULAR
                         </h3>
 
-                        <!-- Tabla de Encabezado Box -->
-                        <table class="table table-bordered" style="width: 100%; border: 1px solid #000; margin-bottom: 25pt; border-collapse: collapse;">
+                        <!-- Tabla de Encabezado sin líneas de recuadro -->
+                        <table style="width: 100%; border: none !important; margin-bottom: 14pt; border-collapse: collapse;">
                             <tr>
-                                <td style="width: 15%; font-weight: bold; background-color: #f4f4f4; border: 1px solid #000; padding: 6px 10px; vertical-align: top; font-size: 12pt;">PARA:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: 1px solid #000; padding: 6px 10px; font-size: 12pt;">
-                                    <span t-out="', '.join(doc.recipient_department_ids.mapped('name')) if doc.recipient_department_ids else 'TODO EL PERSONAL'"/>
+                                <td style="width: 15%; font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">PARA:</td>
+                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                                    <t t-if="doc.recipient_department_ids">
+                                        <t t-foreach="doc.recipient_department_ids" t-as="r_dept">
+                                            <div t-att-style="'margin-bottom: 4px;' if not r_dept_last else ''">
+                                                <t t-if="r_dept.manager_id">
+                                                    <span t-field="r_dept.manager_id.name"/><br/>
+                                                </t>
+                                                <span t-if="r_dept.manager_id and r_dept.manager_id.job_id" t-field="r_dept.manager_id.job_id.name"/>
+                                                <span t-else="" t-field="r_dept.name"/>
+                                            </div>
+                                        </t>
+                                    </t>
+                                    <span t-else="">TODO EL PERSONAL</span>
                                 </td>
                             </tr>
                             <tr>
-                                <td style="font-weight: bold; background-color: #f4f4f4; border: 1px solid #000; padding: 6px 10px; vertical-align: top; font-size: 12pt;">DE:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: 1px solid #000; padding: 6px 10px; font-size: 12pt;">
-                                    <span t-if="doc.send_department_id.manager_id" t-field="doc.send_department_id.manager_id.name"/><br/>
+                                <td style="font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">DE:</td>
+                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                                    <t t-if="doc.send_department_id.manager_id">
+                                        <span t-field="doc.send_department_id.manager_id.name"/><br/>
+                                    </t>
                                     <span t-if="doc.send_department_id.manager_id and doc.send_department_id.manager_id.job_id" t-field="doc.send_department_id.manager_id.job_id.name"/>
                                     <span t-else="" t-field="doc.send_department_id.name"/>
                                 </td>
                             </tr>
                             <tr>
-                                <td style="font-weight: bold; background-color: #f4f4f4; border: 1px solid #000; padding: 6px 10px; vertical-align: top; font-size: 12pt;">ASUNTO:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: 1px solid #000; padding: 6px 10px; font-size: 12pt;">
+                                <td style="font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">ASUNTO:</td>
+                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
                                     <span t-field="doc.name"/>
                                 </td>
                             </tr>
                             <tr>
-                                <td style="font-weight: bold; background-color: #f4f4f4; border: 1px solid #000; padding: 6px 10px; vertical-align: top; font-size: 12pt;">FECHA:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: 1px solid #000; padding: 6px 10px; font-size: 12pt;">
+                                <td style="font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">FECHA:</td>
+                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
                                     <span t-field="doc.date_formatted_spanish"/>
                                 </td>
                             </tr>
@@ -437,13 +460,48 @@
                 <t t-call="correspondence.external_layout_correspondence">
                     <t t-set="doc" t-value="doc.with_context(lang=doc.author_id.lang)"/>
                     <div class="page" style="font-family: 'Georama', Arial, sans-serif; font-size: 12pt; color: #000000; padding-left: 25.4mm !important; padding-right: 25.4mm !important; box-sizing: border-box !important;">
-                        <p style="font-size: 12pt;"><strong>Correlativo:</strong> <span t-field="doc.correlative"/></p>
-                        <h3 class="text-center" style="font-size: 14pt; font-weight: bold; color: #002060;">DOCUMENTO DE CORRESPONDENCIA</h3>
-                        <p style="font-size: 12pt;"><strong>Para:</strong> <span t-out="', '.join(doc.recipient_department_ids.mapped('name'))"/></p>
-                        <p style="font-size: 12pt;"><strong>De:</strong> <span t-field="doc.send_department_id.manager_id.name"/> (<span t-field="doc.send_department_id.name"/>)</p>
-                        <p style="font-size: 12pt;"><strong>Asunto:</strong> <span t-field="doc.name"/></p>
-                        <p style="font-size: 12pt;"><strong>Fecha:</strong> <span t-field="doc.date_formatted_spanish"/></p>
-                        <hr/>
+                        <p style="font-weight: bold; font-size: 14pt; color: #002060; margin-top: 0pt; margin-bottom: 4pt;">
+                            <strong><span t-field="doc.correlative"/></strong>
+                        </p>
+                        <h3 class="text-center" style="font-size: 14pt; font-weight: bold; color: #002060; margin-top: 0pt; margin-bottom: 8pt;">DOCUMENTO DE CORRESPONDENCIA</h3>
+                        <table style="width: 100%; border: none !important; margin-bottom: 14pt; border-collapse: collapse;">
+                            <tr>
+                                <td style="width: 15%; font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">PARA:</td>
+                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                                    <t t-foreach="doc.recipient_department_ids" t-as="r_dept">
+                                        <div t-att-style="'margin-bottom: 4px;' if not r_dept_last else ''">
+                                            <t t-if="r_dept.manager_id">
+                                                <span t-field="r_dept.manager_id.name"/><br/>
+                                            </t>
+                                            <span t-if="r_dept.manager_id and r_dept.manager_id.job_id" t-field="r_dept.manager_id.job_id.name"/>
+                                            <span t-else="" t-field="r_dept.name"/>
+                                        </div>
+                                    </t>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">DE:</td>
+                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                                    <t t-if="doc.send_department_id.manager_id">
+                                        <span t-field="doc.send_department_id.manager_id.name"/><br/>
+                                    </t>
+                                    <span t-if="doc.send_department_id.manager_id and doc.send_department_id.manager_id.job_id" t-field="doc.send_department_id.manager_id.job_id.name"/>
+                                    <span t-else="" t-field="doc.send_department_id.name"/>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">ASUNTO:</td>
+                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                                    <span t-field="doc.name"/>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">FECHA:</td>
+                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                                    <span t-field="doc.date_formatted_spanish"/>
+                                </td>
+                            </tr>
+                        </table>
                         <div id="description_content" style="font-size: 12pt; line-height: 1.15; text-align: justify;" t-out="doc.descripcion"/>
                         <div class="row mt-0" t-if="doc.observaciones">
                             <div class="col-12" style="font-size: 12pt;"><strong>Observaciones:</strong><p t-field="doc.observaciones"/></div>
@@ -466,12 +524,12 @@
         <field name="default" eval="False"/>
         <field name="format">Letter</field>
         <field name="orientation">Portrait</field>
-        <field name="margin_top">42</field>
+        <field name="margin_top">31</field>
         <field name="margin_bottom">36</field>
         <field name="margin_left">0</field>
         <field name="margin_right">0</field>
         <field name="header_line" eval="False"/>
-        <field name="header_spacing">35</field>
+        <field name="header_spacing">26</field>
         <field name="dpi">90</field>
     </record>
 
@@ -480,12 +538,12 @@
         <field name="default" eval="False"/>
         <field name="format">Legal</field>
         <field name="orientation">Portrait</field>
-        <field name="margin_top">42</field>
+        <field name="margin_top">31</field>
         <field name="margin_bottom">36</field>
         <field name="margin_left">0</field>
         <field name="margin_right">0</field>
         <field name="header_line" eval="False"/>
-        <field name="header_spacing">35</field>
+        <field name="header_spacing">26</field>
         <field name="dpi">90</field>
     </record>
 
