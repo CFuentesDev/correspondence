@@ -34,8 +34,15 @@
                         <notebook>
                             <page string="Configuración de Correspondencia" name="correspondence_config">
                                 <group>
-                                    <field name="correlative_prefix"/>
-                                    <field name="can_receive_correspondence"/>
+                                    <group string="Parámetros del Departamento">
+                                        <field name="correlative_prefix"/>
+                                        <field name="can_receive_correspondence"/>
+                                        <field name="director_description" invisible="not manager_id"/>
+                                    </group>
+                                    <group string="Sello del Departamento y Firma del Gerente" invisible="not manager_id">
+                                        <field name="director_stamp" widget="image" class="oe_avatar" options="{'size': [128, 128]}"/>
+                                        <field name="director_signature" widget="image" class="oe_avatar" options="{'size': [128, 128]}"/>
+                                    </group>
                                 </group>
                             </page>
                             <page string="Historial de Gerentes" name="director_history">
@@ -61,6 +68,31 @@
                         </notebook>
                     </sheet>
                 </form>
+            </field>
+        </record>
+
+        <record id="view_department_form_correspondence_inherit" model="ir.ui.view">
+            <field name="name">hr.department.form.correspondence.inherit</field>
+            <field name="model">hr.department</field>
+            <field name="inherit_id" ref="hr.view_department_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//sheet" position="inside">
+                    <notebook>
+                        <page string="Correspondencia y Sellos" name="correspondence_stamp_config">
+                            <group>
+                                <group string="Parámetros del Departamento">
+                                    <field name="correlative_prefix"/>
+                                    <field name="can_receive_correspondence"/>
+                                    <field name="director_description" invisible="not manager_id"/>
+                                </group>
+                                <group string="Sello del Departamento y Firma del Gerente" invisible="not manager_id">
+                                    <field name="director_stamp" widget="image" class="oe_avatar" options="{'size': [128, 128]}"/>
+                                    <field name="director_signature" widget="image" class="oe_avatar" options="{'size': [128, 128]}"/>
+                                </group>
+                            </group>
+                        </page>
+                    </notebook>
+                </xpath>
             </field>
         </record>
     </data>

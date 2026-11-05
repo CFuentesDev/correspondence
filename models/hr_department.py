@@ -13,6 +13,21 @@ class HrDepartment(models.Model):
     correlative_prefix = fields.Char(string='Prefijo de Correlativo', help="Prefijo usado para generar el correlativo de los documentos de este departamento (ej. 'FIN' para Finanzas).")
     director_history_ids = fields.One2many('correspondence.department.director', 'department_id', string='Historial de Directores')
     correlative_ids = fields.One2many('correspondence.department.correlative', 'department_id', string='Correlativos')
+    director_signature = fields.Binary(
+        related='manager_id.director_signature',
+        string="Firma del Gerente / Director",
+        readonly=False,
+    )
+    director_stamp = fields.Binary(
+        related='manager_id.director_stamp',
+        string="Sello del Departamento",
+        readonly=False,
+    )
+    director_description = fields.Html(
+        related='manager_id.director_description',
+        string="Descripción / Gaceta del Cargo",
+        readonly=False,
+    )
 
     def _set_current_director_as_manager(self):
         """
