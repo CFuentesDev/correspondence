@@ -15,6 +15,16 @@
                         padding-right: 25.4mm !important;
                         box-sizing: border-box !important;
                     }
+                    .no-border-meta, .no-border-meta tbody, .no-border-meta tr, .no-border-meta td, .no-border-meta th {
+                        border: 0px none transparent !important;
+                        border-top: 0px none transparent !important;
+                        border-bottom: 0px none transparent !important;
+                        border-left: 0px none transparent !important;
+                        border-right: 0px none transparent !important;
+                        outline: none !important;
+                        box-shadow: none !important;
+                        background-color: transparent !important;
+                    }
                 </style>
                 <div class="d-flex justify-content-between align-items-center" style="border: none; padding-bottom: 0px; margin-bottom: 0px; width: 100%;">
                     <div style="width: 45%;"> 
@@ -224,21 +234,21 @@
                             MEMORANDO
                         </h3>
 
-                        <!-- Tabla de Encabezado sin líneas de recuadro -->
-                        <table style="width: 100%; border: none !important; margin-bottom: 14pt; border-collapse: collapse;">
-                            <tr>
-                                <td style="width: 15%; font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">DE:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                        <!-- Bloque de Encabezado sin líneas de recuadro -->
+                        <div style="width: 100%; margin-bottom: 14pt;">
+                            <div style="display: table; width: 100%; margin-bottom: 5px;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">DE:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
                                     <t t-if="doc.send_department_id.manager_id">
                                         <span t-field="doc.send_department_id.manager_id.name"/><br/>
                                     </t>
                                     <span t-if="doc.send_department_id.manager_id and doc.send_department_id.manager_id.job_id" t-field="doc.send_department_id.manager_id.job_id.name"/>
                                     <span t-else="" t-field="doc.send_department_id.name"/>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">PARA:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                                </div>
+                            </div>
+                            <div style="display: table; width: 100%; margin-bottom: 5px;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">PARA:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
                                     <t t-foreach="doc.recipient_department_ids" t-as="r_dept">
                                         <div t-att-style="'margin-bottom: 4px;' if not r_dept_last else ''">
                                             <t t-if="r_dept.manager_id">
@@ -248,21 +258,21 @@
                                             <span t-else="" t-field="r_dept.name"/>
                                         </div>
                                     </t>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">ASUNTO:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                                </div>
+                            </div>
+                            <div style="display: table; width: 100%; margin-bottom: 5px;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">ASUNTO:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
                                     <span t-field="doc.name"/>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">FECHA:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                                </div>
+                            </div>
+                            <div style="display: table; width: 100%; margin-bottom: 0px;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">FECHA:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
                                     <span t-field="doc.date_formatted_spanish"/>
-                                </td>
-                            </tr>
-                        </table>
+                                </div>
+                            </div>
+                        </div>
 
                         <!-- Cuerpo del Documento -->
                         <div id="description_content" style="font-size: 12pt; line-height: 1.15; text-align: justify; margin-bottom: 25pt; color: #000000;" t-out="doc.descripcion"/>
@@ -304,11 +314,11 @@
                             CIRCULAR
                         </h3>
 
-                        <!-- Tabla de Encabezado sin líneas de recuadro -->
-                        <table style="width: 100%; border: none !important; margin-bottom: 14pt; border-collapse: collapse;">
-                            <tr>
-                                <td style="width: 15%; font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">PARA:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                        <!-- Bloque de Encabezado sin líneas de recuadro -->
+                        <div style="width: 100%; margin-bottom: 14pt;">
+                            <div style="display: table; width: 100%; margin-bottom: 5px;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">PARA:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
                                     <t t-if="doc.recipient_department_ids">
                                         <t t-foreach="doc.recipient_department_ids" t-as="r_dept">
                                             <div t-att-style="'margin-bottom: 4px;' if not r_dept_last else ''">
@@ -321,31 +331,31 @@
                                         </t>
                                     </t>
                                     <span t-else="">TODO EL PERSONAL</span>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">DE:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                                </div>
+                            </div>
+                            <div style="display: table; width: 100%; margin-bottom: 5px;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">DE:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
                                     <t t-if="doc.send_department_id.manager_id">
                                         <span t-field="doc.send_department_id.manager_id.name"/><br/>
                                     </t>
                                     <span t-if="doc.send_department_id.manager_id and doc.send_department_id.manager_id.job_id" t-field="doc.send_department_id.manager_id.job_id.name"/>
                                     <span t-else="" t-field="doc.send_department_id.name"/>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">ASUNTO:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                                </div>
+                            </div>
+                            <div style="display: table; width: 100%; margin-bottom: 5px;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">ASUNTO:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
                                     <span t-field="doc.name"/>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">FECHA:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                                </div>
+                            </div>
+                            <div style="display: table; width: 100%; margin-bottom: 0px;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">FECHA:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
                                     <span t-field="doc.date_formatted_spanish"/>
-                                </td>
-                            </tr>
-                        </table>
+                                </div>
+                            </div>
+                        </div>
 
                         <!-- Cuerpo del Documento -->
                         <div id="description_content" style="font-size: 12pt; line-height: 1.15; text-align: justify; margin-bottom: 25pt; color: #000000;" t-out="doc.descripcion"/>
@@ -464,10 +474,10 @@
                             <strong><span t-field="doc.correlative"/></strong>
                         </p>
                         <h3 class="text-center" style="font-size: 14pt; font-weight: bold; color: #002060; margin-top: 0pt; margin-bottom: 8pt;">DOCUMENTO DE CORRESPONDENCIA</h3>
-                        <table style="width: 100%; border: none !important; margin-bottom: 14pt; border-collapse: collapse;">
-                            <tr>
-                                <td style="width: 15%; font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">PARA:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                        <div style="width: 100%; margin-bottom: 14pt;">
+                            <div style="display: table; width: 100%; margin-bottom: 5px;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">PARA:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
                                     <t t-foreach="doc.recipient_department_ids" t-as="r_dept">
                                         <div t-att-style="'margin-bottom: 4px;' if not r_dept_last else ''">
                                             <t t-if="r_dept.manager_id">
@@ -477,31 +487,31 @@
                                             <span t-else="" t-field="r_dept.name"/>
                                         </div>
                                     </t>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">DE:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                                </div>
+                            </div>
+                            <div style="display: table; width: 100%; margin-bottom: 5px;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">DE:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
                                     <t t-if="doc.send_department_id.manager_id">
                                         <span t-field="doc.send_department_id.manager_id.name"/><br/>
                                     </t>
                                     <span t-if="doc.send_department_id.manager_id and doc.send_department_id.manager_id.job_id" t-field="doc.send_department_id.manager_id.job_id.name"/>
                                     <span t-else="" t-field="doc.send_department_id.name"/>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">ASUNTO:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                                </div>
+                            </div>
+                            <div style="display: table; width: 100%; margin-bottom: 5px;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">ASUNTO:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
                                     <span t-field="doc.name"/>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="font-weight: bold; border: none !important; padding: 3px 0; vertical-align: top; font-size: 12pt;">FECHA:</td>
-                                <td style="font-weight: bold; text-transform: uppercase; border: none !important; padding: 3px 0; font-size: 12pt; line-height: 1.2;">
+                                </div>
+                            </div>
+                            <div style="display: table; width: 100%; margin-bottom: 0px;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">FECHA:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
                                     <span t-field="doc.date_formatted_spanish"/>
-                                </td>
-                            </tr>
-                        </table>
+                                </div>
+                            </div>
+                        </div>
                         <div id="description_content" style="font-size: 12pt; line-height: 1.15; text-align: justify;" t-out="doc.descripcion"/>
                         <div class="row mt-0" t-if="doc.observaciones">
                             <div class="col-12" style="font-size: 12pt;"><strong>Observaciones:</strong><p t-field="doc.observaciones"/></div>
