@@ -14,8 +14,8 @@
                             <field name="director_description"/>
                         </group>
                         <group string="Sellos y Firmas">
-                            <field name="director_signature" widget="image" class="oe_avatar" options="{'size': [128, 128]}"/>
-                            <field name="director_stamp" widget="image" class="oe_avatar" options="{'size': [128, 128]}"/>
+                            <field name="director_signature" widget="image" style="max-width: 240px; max-height: 240px;"/>
+                            <field name="director_stamp" widget="image" style="max-width: 240px; max-height: 240px;"/>
                         </group>
                     </group>
                 </page>
