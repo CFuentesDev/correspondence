@@ -5,11 +5,10 @@
     <!-- =================================================================== -->
     <template id="external_layout_correspondence" inherit_id="web.external_layout_standard" primary="True">
         <xpath expr="//div[contains(@class, 'header') or contains(@t-attf-class, 'header')]" position="replace">
-            <div t-attf-class="header o_company_#{company.id}_layout" style="margin: 0 !important; padding: 0 10mm 0 10mm !important; width: 100% !important; box-sizing: border-box !important;">
+            <div t-attf-class="header o_company_#{company.id}_layout" style="margin: 0 !important; padding: 0 10mm 0 10mm !important; width: 100% !important; box-sizing: border-box !important; page-break-inside: avoid;">
                 <style>
-                    @import url('https://fonts.googleapis.com/css2?family=Georama:ital,wght@0,400;0,700;1,400;1,700&amp;display=swap');
                     body, .page, table, div, p, span, td, th {
-                        font-family: 'Georama', Arial, sans-serif !important;
+                        font-family: 'Georama', 'Liberation Sans', Arial, sans-serif !important;
                     }
                     div.article, .article, div.page, .page {
                         padding-left: 25.4mm !important;
