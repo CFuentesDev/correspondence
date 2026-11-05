@@ -29,10 +29,7 @@
                 </div>
             </div>
         </xpath>
-        <!-- Padding superior (35mm) y lateral (25.4mm) para que el cuerpo inicie limpiamente bajo el encabezado -->
-        <xpath expr="//div[contains(@class, 'article') or contains(@t-attf-class, 'article')]" position="attributes">
-            <attribute name="style">padding-top: 35mm !important; padding-left: 25.4mm !important; padding-right: 25.4mm !important; box-sizing: border-box !important;</attribute>
-        </xpath>
+        <!-- El espaciado superior respecto al cintillo es gobernado por margin_top=42 y header_spacing=35 en report.paperformat -->
         <!-- Footer personalizado de ancho completo (100% sangrado) con QR redondeado, Contacto y Redes Sociales -->
         <xpath expr="//div[contains(@class, 'footer') or contains(@t-attf-class, 'footer')]" position="replace">
             <div t-attf-class="footer o_standard_footer o_company_#{company.id}_layout" style="margin: 0 !important; padding: 0 !important; width: 100% !important; position: relative; height: 135px; page-break-inside: avoid;">
@@ -470,12 +467,12 @@
         <field name="default" eval="False"/>
         <field name="format">Letter</field>
         <field name="orientation">Portrait</field>
-        <field name="margin_top">48</field>
+        <field name="margin_top">42</field>
         <field name="margin_bottom">36</field>
         <field name="margin_left">0</field>
         <field name="margin_right">0</field>
         <field name="header_line" eval="False"/>
-        <field name="header_spacing">5</field>
+        <field name="header_spacing">35</field>
         <field name="dpi">90</field>
     </record>
 
@@ -484,12 +481,12 @@
         <field name="default" eval="False"/>
         <field name="format">Legal</field>
         <field name="orientation">Portrait</field>
-        <field name="margin_top">48</field>
+        <field name="margin_top">42</field>
         <field name="margin_bottom">36</field>
         <field name="margin_left">0</field>
         <field name="margin_right">0</field>
         <field name="header_line" eval="False"/>
-        <field name="header_spacing">5</field>
+        <field name="header_spacing">35</field>
         <field name="dpi">90</field>
     </record>
 
