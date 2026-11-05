@@ -27,12 +27,11 @@
                     }
                 </style>
                 <div class="d-flex justify-content-between align-items-center" style="border: none; padding-bottom: 0px; margin-bottom: 0px; width: 100%;">
-                    <div style="width: 45%;"> 
+                    <div style="width: 70%; text-align: left;"> 
                         <img t-if="company.logo" t-att-src="image_data_uri(company.logo)" style="max-height: 75px;" alt="Ministerio Logo"/>
                         <img t-else="" src="/correspondence/static/src/img/logo-izquierda.png" style="max-height: 75px;" alt="Ministerio Logo"/>
                     </div>
-                    <div style="border-left: 1px solid #666; height: 60px; margin: 0 10px;"></div>
-                    <div style="width: 45%; text-align: right;">
+                    <div style="width: 30%; text-align: right;">
                         <img src="/correspondence/static/src/img/logo-derecha.png" style="max-height: 75px;" alt="CENIPA Logo"/>
                     </div>
                 </div>
