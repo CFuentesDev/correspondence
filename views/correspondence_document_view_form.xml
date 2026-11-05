@@ -10,19 +10,27 @@
                         <field name="already_read_by_my_department" invisible="1"/>
                         <field name="director_has_digital_signature" invisible="1"/>
                         
-                <!-- Firma Digital: visible solo si el director tiene firma y sello -->
+                <!-- Firma Digital: visible si el director tiene firma y sello -->
                 <button name="action_sign" string="Firmar y Sellar" type="object" class="oe_highlight" 
                         invisible="not id or state != 'draft' or correspondence_flow == 'incoming' or not director_has_digital_signature" 
                         groups="correspondence.correspondence_group_director"/>
 
-                <!-- Firma Manual: visible solo si el director NO tiene firma y sello -->
+                <!-- Descargar Documento: disponible siempre (con o sin firma del gerente y en cualquier estado) -->
                 <button name="action_generate_report" string="Descargar Documento" type="object" class="btn-secondary" 
-                        invisible="not id or state != 'draft' or correspondence_flow == 'incoming' or director_has_digital_signature" 
+                        invisible="not id or correspondence_flow == 'incoming'"/>
+
+                <!-- Subir Documento Firmado: disponible en borrador independientemente de si tiene firma digital -->
+                <button name="%(correspondence.action_upload_signed_document_wizard)d" string="Subir Documento Firmado" type="action" class="btn-secondary" 
+                        invisible="not id or state != 'draft' or correspondence_flow == 'incoming'" 
                         groups="correspondence.correspondence_group_director"/>
 
-                <button name="%(correspondence.action_upload_signed_document_wizard)d" string="Subir Documento Firmado" type="action" class="oe_highlight" 
-                        invisible="not id or state != 'draft' or correspondence_flow == 'incoming' or director_has_digital_signature" 
-                        groups="correspondence.correspondence_group_director"/>
+                <!-- Regenerar PDF: actualiza el PDF firmado adjunto con cambios recientes de plantilla o sellos -->
+                <button name="action_regenerate_pdf" string="Regenerar PDF" type="object" class="btn-secondary"
+                        invisible="not id or state == 'draft' or correspondence_flow == 'incoming'"/>
+
+                <!-- Devolver a Borrador: permite regresar el estatus a borrador para modificar el documento -->
+                <button name="action_reset_to_draft" string="Devolver a Borrador" type="object" class="btn-warning"
+                        invisible="not id or state == 'draft' or (correspondence_flow == 'incoming' and state == 'received')"/>
                 
                 <button name="action_send" string="Enviar (Interno)" type="object" class="oe_highlight" 
                         invisible="state != 'signed' or correspondence_flow != 'internal'"/>

@@ -237,6 +237,53 @@ class correspondence_document(models.Model):
             }
         }
 
+    def action_regenerate_pdf(self):
+        """Regenera el archivo PDF del documento con la plantilla y sellos vigentes."""
+        self.ensure_one()
+        report_action = self.correspondence_type.report_action_id or self.env.ref('correspondence.action_report_correspondence_document')
+        pdf_content, _report_type = report_action._render_qweb_pdf(report_action.id, res_ids=self.ids)
+        file_name = f"{self.correlative or 'Documento'}.pdf"
+        vals = {
+            'document_file': base64.b64encode(pdf_content),
+            'file_name': file_name,
+        }
+        if self.state != 'draft':
+            vals['send_department_static'] = self.send_department_id.name
+            vals['recipient_departments_static'] = ", ".join(self.recipient_department_ids.mapped('name'))
+        self.write(vals)
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('PDF Regenerado'),
+                'message': _('El documento PDF ha sido regenerado y actualizado correctamente.'),
+                'type': 'success',
+                'sticky': False,
+                'next': {'type': 'ir.actions.client', 'tag': 'reload'},
+            }
+        }
+
+    def action_reset_to_draft(self):
+        """Devuelve el documento al estado Borrador (o Recibido si es entrante) para permitir su modificación."""
+        for doc in self:
+            target_state = 'received' if doc.correspondence_flow == 'incoming' else 'draft'
+            doc.write({
+                'state': target_state,
+                'send_department_static': False,
+                'recipient_departments_static': False,
+            })
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Devuelto a Borrador'),
+                'message': _('El documento fue devuelto a borrador y ahora puede ser modificado.'),
+                'type': 'info',
+                'sticky': False,
+                'next': {'type': 'ir.actions.client', 'tag': 'reload'},
+            }
+        }
+
     def action_send(self):
         self.write({'state': 'sent'})
 
