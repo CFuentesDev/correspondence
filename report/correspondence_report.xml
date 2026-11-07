@@ -526,6 +526,72 @@
     </template>
 
     <!-- =================================================================== -->
+    <!--         PLANTILLA DE INFORME TÉCNICO                                -->
+    <!-- =================================================================== -->
+    <template id="report_correspondence_base_informe">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="doc">
+                <t t-set="company" t-value="doc.company_id"/>
+                <t t-call="correspondence.external_layout_correspondence">
+                    <t t-set="doc" t-value="doc.with_context(lang=doc.author_id.lang)"/>
+                    <div class="page" style="font-family: 'Georama', Arial, sans-serif; font-size: 12pt; color: #000000; padding-left: 25.4mm !important; padding-right: 25.4mm !important; box-sizing: border-box !important;">
+                        <p style="font-weight: bold; font-size: 14pt; color: #002060; margin-top: 0pt; margin-bottom: 4pt;">
+                            <strong><span t-field="doc.correlative"/></strong>
+                        </p>
+                        <h3 class="text-center" style="font-size: 14pt; font-weight: bold; color: #002060; margin-top: 0pt; margin-bottom: 8pt;">INFORME TECNICO</h3>
+                        <div style="width: 100%; margin-bottom: 14pt;">
+                            <div style="display: table; width: 100%; margin-bottom: 5px;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">PARA:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                    <t t-foreach="doc.recipient_department_ids" t-as="r_dept">
+                                        <div t-att-style="'margin-bottom: 4px;' if not r_dept_last else ''">
+                                            <t t-if="r_dept.manager_id">
+                                                <span t-field="r_dept.manager_id.name"/><br/>
+                                            </t>
+                                            <span t-if="r_dept.manager_id and r_dept.manager_id.job_id" t-field="r_dept.manager_id.job_id.name"/>
+                                            <span t-else="" t-field="r_dept.name"/>
+                                        </div>
+                                    </t>
+                                </div>
+                            </div>
+                            <div style="display: table; width: 100%; margin-bottom: 5px;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">DE:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                    <t t-if="doc.send_department_id.manager_id">
+                                        <span t-field="doc.send_department_id.manager_id.name"/><br/>
+                                    </t>
+                                    <span t-if="doc.send_department_id.manager_id and doc.send_department_id.manager_id.job_id" t-field="doc.send_department_id.manager_id.job_id.name"/>
+                                    <span t-else="" t-field="doc.send_department_id.name"/>
+                                </div>
+                            </div>
+                            <div style="display: table; width: 100%; margin-bottom: 5px;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">ASUNTO:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                    <span t-field="doc.name"/>
+                                </div>
+                            </div>
+                            <div style="display: table; width: 100%; margin-bottom: 0px;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">FECHA:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                    <span t-field="doc.date_formatted_spanish"/>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="description_content" style="font-size: 12pt; line-height: 1.15; text-align: justify;" t-out="doc.descripcion"/>
+                        <div class="row mt-0" t-if="doc.observaciones">
+                            <div class="col-12" style="font-size: 12pt;"><strong>Observaciones:</strong><p t-field="doc.observaciones"/></div>
+                        </div>
+                        <t t-call="correspondence.report_signature_stamp"/>
+                        <p style="font-size: 9pt; font-style: italic; font-weight: normal; margin-top: 15pt; text-align: left; color: #000000;">
+                            <span t-field="doc.author_initials"/>
+                        </p>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+
+    <!-- =================================================================== -->
     <!--                  FORMATOS DE PAPEL (PAPERFORMATS)                   -->
     <!-- =================================================================== -->
     <record id="paperformat_correspondence_letter" model="report.paperformat">
@@ -596,6 +662,16 @@
         <field name="report_name">correspondence.report_correspondence_oficio_template</field>
         <field name="report_file">correspondence.report_correspondence_oficio_template</field>
         <field name="paperformat_id" ref="paperformat_correspondence_legal"/>
+        <field name="binding_model_id" eval="False"/>
+    </record>
+
+    <record id="action_report_correspondence_informe" model="ir.actions.report">
+        <field name="name">Informe Técnico</field>
+        <field name="model">correspondence_document</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">correspondence.report_correspondence_base_informe</field>
+        <field name="report_file">correspondence.report_correspondence_base_informe</field>
+        <field name="paperformat_id" ref="paperformat_correspondence_letter"/>
         <field name="binding_model_id" eval="False"/>
     </record>
 

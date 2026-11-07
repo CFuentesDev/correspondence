@@ -27,6 +27,12 @@
             <field name="default_farewell"><![CDATA[<p>Sin más que agregar y reiterando nuestra disposición de trabajo conjunto, me despido;</p><p><br/></p><p>Atentamente,</p>]]></field>
         </record>
 
+        <record id="tipo_informe" model="correspondence_type">
+            <field name="name">Informe</field>
+            <field name="prefix">INFT</field>
+            <field name="report_action_id" ref="correspondence.action_report_correspondence_informe"/>
+        </record>
+
 
     </data>
 </odoo>
