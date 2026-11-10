@@ -16,7 +16,11 @@
                         groups="correspondence.correspondence_group_director"/>
 
                 <!-- Descargar Documento: disponible siempre (con o sin firma del gerente y en cualquier estado) -->
-                <button name="action_generate_report" string="Descargar Documento" type="object" class="btn-secondary" 
+                <button name="action_generate_report" string="Descargar Documento (PDF)" type="object" class="btn-secondary" 
+                        invisible="not id or correspondence_flow == 'incoming'"/>
+
+                <!-- Descargar en Formato Editable Word (.docx) -->
+                <button name="action_download_docx" string="Descargar Editable (.docx)" type="object" class="btn-secondary" 
                         invisible="not id or correspondence_flow == 'incoming'"/>
 
                 <!-- Subir Documento Firmado: disponible en borrador independientemente de si tiene firma digital -->
@@ -28,9 +32,10 @@
                 <button name="action_regenerate_pdf" string="Regenerar PDF" type="object" class="btn-secondary"
                         invisible="not id or state == 'draft' or correspondence_flow == 'incoming'"/>
 
-                <!-- Devolver a Borrador: permite regresar el estatus a borrador para modificar el documento -->
+                <!-- Devolver a Borrador / Reutilizar Correlativo: restringido a Directores / Dirección Ejecutiva -->
                 <button name="action_reset_to_draft" string="Devolver a Borrador" type="object" class="btn-warning"
-                        invisible="not id or state == 'draft' or (correspondence_flow == 'incoming' and state == 'received')"/>
+                        invisible="not id or state == 'draft' or (correspondence_flow == 'incoming' and state == 'received')"
+                        groups="correspondence.correspondence_group_director,correspondence.correspondence_group_admin"/>
                 
                 <button name="action_send" string="Enviar (Interno)" type="object" class="oe_highlight" 
                         invisible="state != 'signed' or correspondence_flow != 'internal'"/>
@@ -70,17 +75,33 @@
                                 <field name="external_correlative" 
                                        invisible="correspondence_flow != 'incoming'"/>
                                 <field name="author_id" invisible="1"/>
-                                <field name="send_department_id" readonly="1" 
+                                <field name="send_department_id" 
+                                       readonly="state not in ['draft', 'received']" 
                                        invisible="correspondence_flow == 'incoming' or send_department_static" 
                                        required="correspondence_flow in ['internal', 'outgoing']"/>
                                 <field name="send_department_static" string="Departamento Remitente"
                                        invisible="not send_department_static"/>
                                 <field name="external_partner_id" 
-                                       invisible="correspondence_flow == 'internal'" 
-                                       required="correspondence_flow in ['incoming', 'outgoing']" 
+                                       invisible="correspondence_flow != 'incoming'" 
+                                       required="correspondence_flow == 'incoming'" 
                                        readonly="state not in ['draft', 'received']" 
-                                       string="Entidad Externa" context="{'default_is_company': True}"/>
+                                       string="Entidad Remitente Externa" context="{'default_is_company': True}"/>
+                                <field name="external_partner_ids"
+                                       widget="many2many_tags"
+                                       invisible="correspondence_flow != 'outgoing'"
+                                       required="correspondence_flow == 'outgoing' and not external_partner_id"
+                                       readonly="state not in ['draft', 'received']"
+                                       string="Destinatario(s) Externo(s)"/>
                                 <field name="external_address" invisible="correspondence_flow == 'internal'"/>
+                                <field name="recipient_treatment"
+                                       invisible="correspondence_flow == 'incoming'"
+                                       readonly="state not in ['draft', 'received']"/>
+                                <field name="recipient_closing"
+                                       invisible="correspondence_flow == 'incoming'"
+                                       readonly="state not in ['draft', 'received']"/>
+                                <field name="include_recipient_title"
+                                       invisible="correspondence_flow == 'incoming'"
+                                       readonly="state not in ['draft', 'received']"/>
                             </group>
                             <group>
                                 <field name="date" readonly="state not in ['draft', 'received']"/>
@@ -96,15 +117,54 @@
                                 <field name="recipient_departments_static" string="Departamentos Destinatarios"
                                        invisible="not recipient_departments_static"/>
                                 <field name="excluded_department_id" invisible="1"/>
+                                <field name="cc_department_ids"
+                                       widget="many2many_tags"
+                                       options="{'no_create': True, 'no_open': True}"
+                                       invisible="correspondence_flow == 'incoming'"
+                                       readonly="state not in ['draft', 'received']"/>
+                                <field name="cc_partner_ids"
+                                       widget="many2many_tags"
+                                       invisible="correspondence_flow == 'incoming'"
+                                       readonly="state not in ['draft', 'received']"/>
                                 <field name="shipping_method" 
                                        invisible="correspondence_flow != 'outgoing'" 
                                        required="correspondence_flow == 'outgoing'"/>
                                 <field name="physical_location_id" options="{'no_create': True}"/>
+                                <field name="tiene_anexos"
+                                       invisible="correspondence_flow == 'incoming'"
+                                       readonly="state not in ['draft', 'received']"/>
+                                <field name="show_page_numbers"
+                                       invisible="correspondence_flow == 'incoming'"
+                                       readonly="state not in ['draft', 'received']"/>
+                                <field name="manual_total_pages"
+                                       invisible="correspondence_flow == 'incoming' or not show_page_numbers"
+                                       readonly="state not in ['draft', 'received']"/>
                             </group>
                         </group>
                         <notebook>
                             <page string="Descripción" name="description">
-                                <field name="descripcion" readonly="state not in ['draft', 'received']"/>
+                                <group invisible="correspondence_flow == 'incoming'">
+                                    <field name="use_institutional_greeting"
+                                           groups="correspondence.correspondence_group_director,correspondence.correspondence_group_admin"
+                                           readonly="state not in ['draft', 'received']"/>
+                                </group>
+                                <div class="alert alert-secondary mb-2 py-2" role="status"
+                                     invisible="correspondence_flow == 'incoming' or not use_institutional_greeting or not institutional_greeting">
+                                    <strong>Saludo Institucional Oficial (Incluido automáticamente):</strong>
+                                    <field name="institutional_greeting" readonly="1" nolabel="1"/>
+                                </div>
+                                <field name="descripcion" readonly="state not in ['draft', 'received']" placeholder="Escriba aquí el cuerpo principal del documento (los párrafos se separarán automáticamente con formato Georama 11pt)..."/>
+                                <div class="alert alert-secondary mt-2 py-2" role="status"
+                                     invisible="correspondence_flow == 'incoming' or not use_institutional_greeting or not institutional_farewell">
+                                    <strong>Despedida Institucional Oficial (Incluida automáticamente):</strong>
+                                    <field name="institutional_farewell" readonly="1" nolabel="1"/>
+                                </div>
+                            </page>
+                            <page string="Anexos (Post-Firma)" name="printed_annexes" invisible="not tiene_anexos">
+                                <div class="alert alert-info mb-2 py-2" role="status">
+                                    <strong>Anexos Impresos Posteriores a la Firma:</strong> Todo el contenido cargado en esta pestaña (tablas, matrices, informes, imágenes de Cédula/RIF) se imprimirá en hojas posteriores al bloque de firma, conservando el cintillo, el correlativo del oficio y la numeración continua de páginas.
+                                </div>
+                                <field name="anexos_html" readonly="state not in ['draft', 'received']" placeholder="Pegue o redacte aquí las tablas, informes o imágenes de anexos que van después de la firma..."/>
                             </page>
                             <page string="Observaciones" name="observations">
                                 <field name="observaciones" readonly="state not in ['draft', 'received']"/>

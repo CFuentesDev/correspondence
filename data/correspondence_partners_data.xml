@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Catálogo Base de Instituciones Externas Frecuentes para Correspondencia Saliente / Entrante -->
+        <record id="partner_inst_mpppa" model="res.partner">
+            <field name="name">MINISTERIO DEL PODER POPULAR DE PESCA Y ACUICULTURA (MPPPA)</field>
+            <field name="is_company" eval="True"/>
+            <field name="company_type">company</field>
+        </record>
+
+        <record id="partner_inst_ministro_mpppa" model="res.partner">
+            <field name="name">JUAN CARLOS LOYO HERNÁNDEZ</field>
+            <field name="function">MINISTRO DEL PODER POPULAR DE PESCA Y ACUICULTURA</field>
+            <field name="parent_id" ref="partner_inst_mpppa"/>
+            <field name="is_company" eval="False"/>
+            <field name="company_type">person</field>
+        </record>
+
+        <record id="partner_inst_ivic" model="res.partner">
+            <field name="name">INSTITUTO VENEZOLANO DE INVESTIGACIONES CIENTÍFICAS (IVIC)</field>
+            <field name="is_company" eval="True"/>
+            <field name="company_type">company</field>
+        </record>
+
+        <record id="partner_inst_fondo_negro_primero" model="res.partner">
+            <field name="name">SERVICIO DESCONCENTRADO FONDO NEGRO PRIMERO</field>
+            <field name="is_company" eval="True"/>
+            <field name="company_type">company</field>
+        </record>
+
+        <record id="partner_inst_insopesca" model="res.partner">
+            <field name="name">INSTITUTO SOCIALISTA DE LA PESCA Y ACUICULTURA (INSOPESCA)</field>
+            <field name="is_company" eval="True"/>
+            <field name="company_type">company</field>
+        </record>
+
+        <record id="partner_inst_fonpesca" model="res.partner">
+            <field name="name">FONDO PESQUERO Y ACUÍCOLA DE VENEZUELA (FONPESCA)</field>
+            <field name="is_company" eval="True"/>
+            <field name="company_type">company</field>
+        </record>
+
+        <record id="partner_inst_corpesca" model="res.partner">
+            <field name="name">CORPORACIÓN DE SERVICIOS PESQUEROS Y ACUÍCOLAS DE VENEZUELA (CORPESCA)</field>
+            <field name="is_company" eval="True"/>
+            <field name="company_type">company</field>
+        </record>
+
+        <record id="partner_inst_ciara" model="res.partner">
+            <field name="name">FUNDACIÓN PARA LA CAPACITACIÓN E INNOVACIÓN PARA APOYAR LA REVOLUCIÓN AGRARIA (CIARA)</field>
+            <field name="is_company" eval="True"/>
+            <field name="company_type">company</field>
+        </record>
+    </data>
+</odoo>

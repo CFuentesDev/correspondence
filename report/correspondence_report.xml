@@ -14,6 +14,64 @@
                         padding-left: 25.4mm !important;
                         padding-right: 25.4mm !important;
                         box-sizing: border-box !important;
+                        font-size: 11pt !important;
+                        line-height: 1.1 !important;
+                    }
+                    #description_content, #annexes_content {
+                        font-size: 11pt !important;
+                        line-height: 1.1 !important;
+                        text-align: justify !important;
+                        color: #000000 !important;
+                    }
+                    #description_content p, #annexes_content p {
+                        margin-top: 0pt !important;
+                        margin-bottom: 10pt !important;
+                        line-height: 1.1 !important;
+                        text-align: justify !important;
+                        font-size: 11pt !important;
+                    }
+                    #description_content table, #annexes_content table {
+                        width: 100% !important;
+                        border-collapse: collapse !important;
+                        margin-top: 8pt !important;
+                        margin-bottom: 12pt !important;
+                        page-break-inside: auto !important;
+                    }
+                    #description_content table tr, #annexes_content table tr {
+                        page-break-inside: avoid !important;
+                        page-break-after: auto !important;
+                    }
+                    #description_content table thead tr th,
+                    #description_content table tr:first-child th,
+                    #annexes_content table thead tr th,
+                    #annexes_content table tr:first-child th {
+                        background-color: #002060 !important;
+                        color: #ffffff !important;
+                        font-weight: bold !important;
+                        padding: 6px 8px !important;
+                        border: 1px solid #002060 !important;
+                        text-align: center !important;
+                        font-size: 10pt !important;
+                    }
+                    #description_content table tbody tr td,
+                    #description_content table tr td,
+                    #annexes_content table tbody tr td,
+                    #annexes_content table tr td {
+                        background-color: #ffffff !important;
+                        color: #000000 !important;
+                        padding: 5px 8px !important;
+                        border: 1px solid #333333 !important;
+                        font-size: 10pt !important;
+                        vertical-align: middle !important;
+                    }
+                    #annexes_content img {
+                        max-width: 115mm !important;
+                        max-height: 80mm !important;
+                        width: auto !important;
+                        height: auto !important;
+                        display: block !important;
+                        margin: 8pt auto !important;
+                        page-break-inside: avoid !important;
                     }
                     .no-border-meta, .no-border-meta tbody, .no-border-meta tr, .no-border-meta td, .no-border-meta th {
                         border: 0px none transparent !important;
@@ -108,6 +166,11 @@
                             </tr>
                         </table>
                     </div>
+                </div>
+
+                <!-- Numeración de Páginas (Derecha: Página X de Y, incluso 1 de 1) -->
+                <div t-if="not doc or doc.show_page_numbers" style="position: absolute; bottom: 8px; right: 12mm; z-index: 10; background-color: rgba(255,255,255,0.92); padding: 2px 8px; border-radius: 6px; font-family: 'Georama', Arial, sans-serif; font-size: 8.5pt; font-weight: bold; color: #002060;">
+                    Página <span class="page"/> de <t t-if="doc and doc.manual_total_pages &gt; 0"><span t-out="doc.manual_total_pages"/></t><t t-else=""><span class="topage"/></t>
                 </div>
             </div>
         </xpath>
@@ -214,6 +277,43 @@
     </template>
 
     <!-- =================================================================== -->
+    <!--    PLANTILLA REUTILIZABLE: CON COPIA (C.c.), INICIALES Y ANEXOS     -->
+    <!-- =================================================================== -->
+    <template id="report_cc_initials_and_annexes">
+        <!-- Bloque Con Copia (C.c.) -->
+        <t t-set="cc_items" t-value="doc.get_formatted_cc_list()"/>
+        <div t-if="cc_items" style="margin-top: 12pt; font-size: 9.5pt; line-height: 1.15; page-break-inside: avoid;">
+            <p style="margin-bottom: 2px; font-weight: bold; color: #000000;">C.c.:</p>
+            <t t-foreach="cc_items" t-as="cc_rec">
+                <div style="margin-bottom: 3px; font-weight: bold; text-transform: uppercase; color: #002060;">
+                    <span t-out="cc_rec.get('name')"/>
+                    <t t-if="cc_rec.get('job')"> — <span t-out="cc_rec.get('job')"/></t>
+                    <t t-if="cc_rec.get('institution')"> (<span t-out="cc_rec.get('institution')"/>)</t>
+                </div>
+            </t>
+        </div>
+
+        <!-- Iniciales al pie -->
+        <p style="font-size: 9pt; font-style: italic; font-weight: normal; margin-top: 12pt; text-align: left; color: #000000;">
+            <span t-field="doc.author_initials"/>
+        </p>
+
+        <!-- Pestaña de Anexos Impresos (Salto de página posterior a la firma manteniendo cintillo y correlativo) -->
+        <t t-if="doc.tiene_anexos and doc.anexos_html">
+            <div style="page-break-before: always;"/>
+            <div style="width: 100%; margin-bottom: 14pt; display: table;">
+                <div style="display: table-cell; width: 65%; font-weight: bold; font-size: 12pt; color: #002060; vertical-align: top;">
+                    ANEXO AL DOCUMENTO: <span t-field="doc.correlative"/>
+                </div>
+                <div style="display: table-cell; width: 35%; font-weight: bold; font-size: 10pt; color: #000000; text-align: right; vertical-align: top;">
+                    <span t-field="doc.date_formatted_spanish"/>
+                </div>
+            </div>
+            <div id="annexes_content" style="font-size: 11pt; line-height: 1.1; text-align: justify; color: #000000;" t-out="doc.anexos_html"/>
+        </t>
+    </template>
+
+    <!-- =================================================================== -->
     <!--                  PLANTILLA PARA MEMORANDOS                          -->
     <!-- =================================================================== -->
     <template id="report_correspondence_memorando_template">
@@ -222,22 +322,22 @@
                 <t t-set="company" t-value="doc.company_id"/>
                 <t t-call="correspondence.external_layout_correspondence">
                     <t t-set="doc" t-value="doc.with_context(lang=doc.author_id.lang)"/>
-                    <div class="page" style="font-family: 'Georama', Arial, sans-serif; font-size: 12pt; color: #000000; padding-left: 25.4mm !important; padding-right: 25.4mm !important; box-sizing: border-box !important;">
+                    <div class="page" style="font-family: 'Georama', Arial, sans-serif; font-size: 11pt; color: #000000; padding-left: 25.4mm !important; padding-right: 25.4mm !important; box-sizing: border-box !important;">
                         <!-- Correlativo -->
-                        <p style="font-weight: bold; font-size: 14pt; color: #002060; margin-top: 0pt; margin-bottom: 4pt;">
+                        <p style="font-weight: bold; font-size: 13pt; color: #002060; margin-top: 0pt; margin-bottom: 4pt;">
                             <strong><span t-field="doc.correlative"/></strong>
                         </p>
 
                         <!-- Título -->
-                        <h3 class="text-center" style="font-weight: bold; text-decoration: underline; letter-spacing: 1px; margin-top: 0pt; margin-bottom: 8pt; font-size: 14pt; color: #002060;">
+                        <h3 class="text-center" style="font-weight: bold; text-decoration: underline; letter-spacing: 1px; margin-top: 0pt; margin-bottom: 8pt; font-size: 13pt; color: #002060;">
                             MEMORANDO
                         </h3>
 
                         <!-- Bloque de Encabezado sin líneas de recuadro -->
                         <div style="width: 100%; margin-bottom: 14pt;">
                             <div style="display: table; width: 100%; margin-bottom: 5px;">
-                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">DE:</div>
-                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 11pt;">DE:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 11pt; line-height: 1.15;">
                                     <t t-if="doc.send_department_id.manager_id">
                                         <span t-field="doc.send_department_id.manager_id.name"/><br/>
                                     </t>
@@ -246,8 +346,8 @@
                                 </div>
                             </div>
                             <div style="display: table; width: 100%; margin-bottom: 5px;">
-                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">PARA:</div>
-                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 11pt;">PARA:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 11pt; line-height: 1.15;">
                                     <t t-foreach="doc.recipient_department_ids" t-as="r_dept">
                                         <div t-att-style="'margin-bottom: 4px;' if not r_dept_last else ''">
                                             <t t-if="r_dept.manager_id">
@@ -260,33 +360,31 @@
                                 </div>
                             </div>
                             <div style="display: table; width: 100%; margin-bottom: 5px;">
-                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">ASUNTO:</div>
-                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 11pt;">ASUNTO:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 11pt; line-height: 1.15;">
                                     <span t-field="doc.name"/>
                                 </div>
                             </div>
                             <div style="display: table; width: 100%; margin-bottom: 0px;">
-                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">FECHA:</div>
-                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 11pt;">FECHA:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 11pt; line-height: 1.15;">
                                     <span t-field="doc.date_formatted_spanish"/>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Cuerpo del Documento -->
-                        <div id="description_content" style="font-size: 12pt; line-height: 1.15; text-align: justify; margin-bottom: 25pt; color: #000000;" t-out="doc.descripcion"/>
+                        <!-- Cuerpo del Documento (con Saludo y Despedida Institucional Fijos) -->
+                        <div id="description_content" style="font-size: 11pt; line-height: 1.1; text-align: justify; margin-bottom: 20pt; color: #000000;" t-out="doc.get_full_body_html()"/>
 
                         <div class="row mt-0" t-if="doc.observaciones">
-                            <div class="col-12" style="font-size: 12pt;"><strong>Observaciones:</strong><p t-field="doc.observaciones"/></div>
+                            <div class="col-12" style="font-size: 11pt;"><strong>Observaciones:</strong><p t-field="doc.observaciones"/></div>
                         </div>
 
                         <!-- Bloque de Firma -->
                         <t t-call="correspondence.report_signature_stamp"/>
 
-                        <!-- Iniciales al pie -->
-                        <p style="font-size: 9pt; font-style: italic; font-weight: normal; margin-top: 15pt; text-align: left; color: #000000;">
-                            <span t-field="doc.author_initials"/>
-                        </p>
+                        <!-- Con Copia, Iniciales y Anexos Post-Firma -->
+                        <t t-call="correspondence.report_cc_initials_and_annexes"/>
                     </div>
                 </t>
             </t>
@@ -302,22 +400,22 @@
                 <t t-set="company" t-value="doc.company_id"/>
                 <t t-call="correspondence.external_layout_correspondence">
                     <t t-set="doc" t-value="doc.with_context(lang=doc.author_id.lang)"/>
-                    <div class="page" style="font-family: 'Georama', Arial, sans-serif; font-size: 12pt; color: #000000; padding-left: 25.4mm !important; padding-right: 25.4mm !important; box-sizing: border-box !important;">
+                    <div class="page" style="font-family: 'Georama', Arial, sans-serif; font-size: 11pt; color: #000000; padding-left: 25.4mm !important; padding-right: 25.4mm !important; box-sizing: border-box !important;">
                         <!-- Correlativo -->
-                        <p style="font-weight: bold; font-size: 14pt; color: #002060; margin-top: 0pt; margin-bottom: 4pt;">
+                        <p style="font-weight: bold; font-size: 13pt; color: #002060; margin-top: 0pt; margin-bottom: 4pt;">
                             <strong><span t-field="doc.correlative"/></strong>
                         </p>
 
                         <!-- Título -->
-                        <h3 class="text-center" style="font-weight: bold; text-decoration: underline; letter-spacing: 1px; margin-top: 0pt; margin-bottom: 8pt; font-size: 14pt; color: #002060;">
+                        <h3 class="text-center" style="font-weight: bold; text-decoration: underline; letter-spacing: 1px; margin-top: 0pt; margin-bottom: 8pt; font-size: 13pt; color: #002060;">
                             CIRCULAR
                         </h3>
 
                         <!-- Bloque de Encabezado sin líneas de recuadro -->
                         <div style="width: 100%; margin-bottom: 14pt;">
                             <div style="display: table; width: 100%; margin-bottom: 5px;">
-                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">PARA:</div>
-                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 11pt;">PARA:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 11pt; line-height: 1.15;">
                                     <t t-if="doc.recipient_department_ids">
                                         <t t-foreach="doc.recipient_department_ids" t-as="r_dept">
                                             <div t-att-style="'margin-bottom: 4px;' if not r_dept_last else ''">
@@ -333,8 +431,8 @@
                                 </div>
                             </div>
                             <div style="display: table; width: 100%; margin-bottom: 5px;">
-                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">DE:</div>
-                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 11pt;">DE:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 11pt; line-height: 1.15;">
                                     <t t-if="doc.send_department_id.manager_id">
                                         <span t-field="doc.send_department_id.manager_id.name"/><br/>
                                     </t>
@@ -343,33 +441,31 @@
                                 </div>
                             </div>
                             <div style="display: table; width: 100%; margin-bottom: 5px;">
-                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">ASUNTO:</div>
-                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 11pt;">ASUNTO:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 11pt; line-height: 1.15;">
                                     <span t-field="doc.name"/>
                                 </div>
                             </div>
                             <div style="display: table; width: 100%; margin-bottom: 0px;">
-                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">FECHA:</div>
-                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 11pt;">FECHA:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 11pt; line-height: 1.15;">
                                     <span t-field="doc.date_formatted_spanish"/>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Cuerpo del Documento -->
-                        <div id="description_content" style="font-size: 12pt; line-height: 1.15; text-align: justify; margin-bottom: 25pt; color: #000000;" t-out="doc.descripcion"/>
+                        <div id="description_content" style="font-size: 11pt; line-height: 1.1; text-align: justify; margin-bottom: 20pt; color: #000000;" t-out="doc.get_full_body_html()"/>
 
                         <div class="row mt-0" t-if="doc.observaciones">
-                            <div class="col-12" style="font-size: 12pt;"><strong>Observaciones:</strong><p t-field="doc.observaciones"/></div>
+                            <div class="col-12" style="font-size: 11pt;"><strong>Observaciones:</strong><p t-field="doc.observaciones"/></div>
                         </div>
 
                         <!-- Bloque de Firma -->
                         <t t-call="correspondence.report_signature_stamp"/>
 
-                        <!-- Iniciales al pie -->
-                        <p style="font-size: 9pt; font-style: italic; font-weight: normal; margin-top: 15pt; text-align: left; color: #000000;">
-                            <span t-field="doc.author_initials"/>
-                        </p>
+                        <!-- Con Copia, Iniciales y Anexos Post-Firma -->
+                        <t t-call="correspondence.report_cc_initials_and_annexes"/>
                     </div>
                 </t>
             </t>
@@ -385,44 +481,50 @@
                 <t t-set="company" t-value="doc.company_id"/>
                 <t t-call="correspondence.external_layout_correspondence">
                     <t t-set="doc" t-value="doc.with_context(lang=doc.author_id.lang)"/>
-                    <div class="page" style="font-family: 'Georama', Arial, sans-serif; font-size: 12pt; color: #000000; padding-left: 25.4mm !important; padding-right: 25.4mm !important; box-sizing: border-box !important;">
+                    <div class="page" style="font-family: 'Georama', Arial, sans-serif; font-size: 11pt; color: #000000; padding-left: 25.4mm !important; padding-right: 25.4mm !important; box-sizing: border-box !important;">
                         <!-- Correlativo (Izquierda) y Fecha (Derecha) -->
-                        <div style="width: 100%; margin-bottom: 25pt; display: table;">
-                            <div style="display: table-cell; width: 50%; font-weight: bold; font-size: 14pt; color: #002060; vertical-align: top;">
+                        <div style="width: 100%; margin-bottom: 18pt; display: table;">
+                            <div style="display: table-cell; width: 50%; font-weight: bold; font-size: 13pt; color: #002060; vertical-align: top;">
                                 <span><span t-field="doc.correlative"/></span>
                             </div>
-                            <div style="display: table-cell; width: 50%; font-weight: bold; font-size: 12pt; color: #000000; text-align: right; vertical-align: top;">
+                            <div style="display: table-cell; width: 50%; font-weight: bold; font-size: 11pt; color: #000000; text-align: right; vertical-align: top;">
                                 <span t-field="doc.date_formatted_spanish_long"/>
                             </div>
                         </div>
 
-                        <!-- Bloque de Destinatario (Alineado a la Izquierda) -->
-                        <div style="margin-bottom: 25pt; font-size: 12pt; line-height: 1.15; color: #000000;">
-                            <p style="margin-bottom: 2px;"><strong>Ciudadano:</strong></p>
-                            <p style="margin-bottom: 2px; font-weight: bold; text-transform: uppercase;" t-if="doc.external_partner_id">
-                                <span t-field="doc.external_partner_id.name"/>
+                        <!-- Bloque de Destinatario(s) en MAYÚSCULAS y Azul Institucional (#002060) -->
+                        <div style="margin-bottom: 18pt; font-size: 11pt; line-height: 1.15; color: #000000;">
+                            <p style="margin-bottom: 3px; font-weight: bold; color: #000000;">
+                                <span t-out="doc.get_recipient_treatment_label()"/>
                             </p>
-                            <p style="margin-bottom: 2px; font-weight: bold; text-transform: uppercase;" t-elif="doc.recipient_department_ids">
-                                <span t-out="', '.join(doc.recipient_department_ids.mapped('name'))"/>
+                            <t t-set="recipients_list" t-value="doc.get_formatted_recipients_list()"/>
+                            <t t-foreach="recipients_list" t-as="rec_item">
+                                <div t-att-style="'margin-bottom: 6px;' if not rec_item_last else 'margin-bottom: 3px;'">
+                                    <p t-if="rec_item.get('name')" style="margin-bottom: 1px; font-weight: bold; text-transform: uppercase; color: #002060;">
+                                        <span t-out="rec_item.get('name')"/>
+                                    </p>
+                                    <p t-if="rec_item.get('job')" style="margin-bottom: 1px; font-weight: bold; text-transform: uppercase; color: #002060;">
+                                        <span t-out="rec_item.get('job')"/>
+                                    </p>
+                                    <p t-if="rec_item.get('institution')" style="margin-bottom: 1px; font-weight: bold; text-transform: uppercase; color: #002060;">
+                                        <span t-out="rec_item.get('institution')"/>
+                                    </p>
+                                </div>
+                            </t>
+                            <p style="margin-top: 4px; font-weight: bold; color: #000000;">
+                                <span t-out="doc.get_recipient_closing_label()"/>
                             </p>
-                            <p style="margin-bottom: 2px; font-weight: bold; text-transform: uppercase;" t-if="doc.external_partner_id and doc.external_partner_id.function">
-                                <span t-field="doc.external_partner_id.function"/>
-                            </p>
-                            <p style="margin-bottom: 2px;" t-if="doc.external_address">
-                                <span t-field="doc.external_address"/>
-                            </p>
-                            <p style="margin-top: 5px; font-weight: bold;">Su Despacho. -</p>
                         </div>
 
-                        <!-- Cuerpo del Documento -->
-                        <div id="description_content" style="font-size: 12pt; line-height: 1.15; text-align: justify; margin-bottom: 25pt; color: #000000;" t-out="doc.descripcion"/>
+                        <!-- Cuerpo del Documento (con Saludo y Despedida Institucional Fijos) -->
+                        <div id="description_content" style="font-size: 11pt; line-height: 1.1; text-align: justify; margin-bottom: 20pt; color: #000000;" t-out="doc.get_full_body_html()"/>
 
                         <div class="row mt-0" t-if="doc.observaciones">
-                            <div class="col-12" style="font-size: 12pt;"><strong>Observaciones:</strong><p t-field="doc.observaciones"/></div>
+                            <div class="col-12" style="font-size: 11pt;"><strong>Observaciones:</strong><p t-field="doc.observaciones"/></div>
                         </div>
 
                         <!-- Bloque de Firma Oficial de Oficio con Nota de Gaceta -->
-                        <div style="text-align: center; margin-top: 20px; page-break-inside: avoid;">
+                        <div style="text-align: center; margin-top: 16px; page-break-inside: avoid;">
                             <div style="display: inline-block; width: 540px; text-align: center;">
                                 <div style="min-height: 145px; margin-bottom: 6px; display: table; width: 100%;">
                                     <div style="display: table-cell; width: 50%; text-align: center; vertical-align: bottom; padding-right: 10px;">
@@ -432,7 +534,7 @@
                                         <img t-if="doc.send_department_id.manager_id.director_signature" t-att-src="image_data_uri(doc.send_department_id.manager_id.director_signature)" style="height: 135px; max-height: 135px; width: auto; image-rendering: -webkit-optimize-contrast;"/>
                                     </div>
                                 </div>
-                                <p style="margin-bottom: 2px; font-weight: bold; text-transform: uppercase; font-size: 12pt; color: #002060;">
+                                <p style="margin-bottom: 2px; font-weight: bold; text-transform: uppercase; font-size: 11pt; color: #002060;">
                                     <strong t-if="doc.send_department_id.manager_id" t-field="doc.send_department_id.manager_id.name"/>
                                     <strong t-else="">ERIC RICARDO MARTÍNEZ GÓMEZ</strong>
                                 </p>
@@ -449,10 +551,8 @@
                             </div>
                         </div>
 
-                        <!-- Iniciales al pie -->
-                        <p style="font-size: 9pt; font-style: italic; font-weight: normal; margin-top: 15pt; text-align: left; color: #000000;">
-                            <span t-field="doc.author_initials"/>
-                        </p>
+                        <!-- Con Copia, Iniciales y Anexos Post-Firma -->
+                        <t t-call="correspondence.report_cc_initials_and_annexes"/>
                     </div>
                 </t>
             </t>
@@ -468,15 +568,15 @@
                 <t t-set="company" t-value="doc.company_id"/>
                 <t t-call="correspondence.external_layout_correspondence">
                     <t t-set="doc" t-value="doc.with_context(lang=doc.author_id.lang)"/>
-                    <div class="page" style="font-family: 'Georama', Arial, sans-serif; font-size: 12pt; color: #000000; padding-left: 25.4mm !important; padding-right: 25.4mm !important; box-sizing: border-box !important;">
-                        <p style="font-weight: bold; font-size: 14pt; color: #002060; margin-top: 0pt; margin-bottom: 4pt;">
+                    <div class="page" style="font-family: 'Georama', Arial, sans-serif; font-size: 11pt; color: #000000; padding-left: 25.4mm !important; padding-right: 25.4mm !important; box-sizing: border-box !important;">
+                        <p style="font-weight: bold; font-size: 13pt; color: #002060; margin-top: 0pt; margin-bottom: 4pt;">
                             <strong><span t-field="doc.correlative"/></strong>
                         </p>
-                        <h3 class="text-center" style="font-size: 14pt; font-weight: bold; color: #002060; margin-top: 0pt; margin-bottom: 8pt;">DOCUMENTO DE CORRESPONDENCIA</h3>
+                        <h3 class="text-center" style="font-size: 13pt; font-weight: bold; color: #002060; margin-top: 0pt; margin-bottom: 8pt;">DOCUMENTO DE CORRESPONDENCIA</h3>
                         <div style="width: 100%; margin-bottom: 14pt;">
                             <div style="display: table; width: 100%; margin-bottom: 5px;">
-                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">PARA:</div>
-                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 11pt;">PARA:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 11pt; line-height: 1.15;">
                                     <t t-foreach="doc.recipient_department_ids" t-as="r_dept">
                                         <div t-att-style="'margin-bottom: 4px;' if not r_dept_last else ''">
                                             <t t-if="r_dept.manager_id">
@@ -489,8 +589,8 @@
                                 </div>
                             </div>
                             <div style="display: table; width: 100%; margin-bottom: 5px;">
-                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">DE:</div>
-                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 11pt;">DE:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 11pt; line-height: 1.15;">
                                     <t t-if="doc.send_department_id.manager_id">
                                         <span t-field="doc.send_department_id.manager_id.name"/><br/>
                                     </t>
@@ -499,26 +599,24 @@
                                 </div>
                             </div>
                             <div style="display: table; width: 100%; margin-bottom: 5px;">
-                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">ASUNTO:</div>
-                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 11pt;">ASUNTO:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 11pt; line-height: 1.15;">
                                     <span t-field="doc.name"/>
                                 </div>
                             </div>
                             <div style="display: table; width: 100%; margin-bottom: 0px;">
-                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">FECHA:</div>
-                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 11pt;">FECHA:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 11pt; line-height: 1.15;">
                                     <span t-field="doc.date_formatted_spanish"/>
                                 </div>
                             </div>
                         </div>
-                        <div id="description_content" style="font-size: 12pt; line-height: 1.15; text-align: justify;" t-out="doc.descripcion"/>
+                        <div id="description_content" style="font-size: 11pt; line-height: 1.1; text-align: justify;" t-out="doc.get_full_body_html()"/>
                         <div class="row mt-0" t-if="doc.observaciones">
-                            <div class="col-12" style="font-size: 12pt;"><strong>Observaciones:</strong><p t-field="doc.observaciones"/></div>
+                            <div class="col-12" style="font-size: 11pt;"><strong>Observaciones:</strong><p t-field="doc.observaciones"/></div>
                         </div>
                         <t t-call="correspondence.report_signature_stamp"/>
-                        <p style="font-size: 9pt; font-style: italic; font-weight: normal; margin-top: 15pt; text-align: left; color: #000000;">
-                            <span t-field="doc.author_initials"/>
-                        </p>
+                        <t t-call="correspondence.report_cc_initials_and_annexes"/>
                     </div>
                 </t>
             </t>
@@ -534,15 +632,15 @@
                 <t t-set="company" t-value="doc.company_id"/>
                 <t t-call="correspondence.external_layout_correspondence">
                     <t t-set="doc" t-value="doc.with_context(lang=doc.author_id.lang)"/>
-                    <div class="page" style="font-family: 'Georama', Arial, sans-serif; font-size: 12pt; color: #000000; padding-left: 25.4mm !important; padding-right: 25.4mm !important; box-sizing: border-box !important;">
-                        <p style="font-weight: bold; font-size: 14pt; color: #002060; margin-top: 0pt; margin-bottom: 4pt;">
+                    <div class="page" style="font-family: 'Georama', Arial, sans-serif; font-size: 11pt; color: #000000; padding-left: 25.4mm !important; padding-right: 25.4mm !important; box-sizing: border-box !important;">
+                        <p style="font-weight: bold; font-size: 13pt; color: #002060; margin-top: 0pt; margin-bottom: 4pt;">
                             <strong><span t-field="doc.correlative"/></strong>
                         </p>
-                        <h3 class="text-center" style="font-size: 14pt; font-weight: bold; color: #002060; margin-top: 0pt; margin-bottom: 8pt;">INFORME TECNICO</h3>
+                        <h3 class="text-center" style="font-size: 13pt; font-weight: bold; color: #002060; margin-top: 0pt; margin-bottom: 8pt;">INFORME TECNICO</h3>
                         <div style="width: 100%; margin-bottom: 14pt;">
                             <div style="display: table; width: 100%; margin-bottom: 5px;">
-                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">PARA:</div>
-                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 11pt;">PARA:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 11pt; line-height: 1.15;">
                                     <t t-foreach="doc.recipient_department_ids" t-as="r_dept">
                                         <div t-att-style="'margin-bottom: 4px;' if not r_dept_last else ''">
                                             <t t-if="r_dept.manager_id">
@@ -555,8 +653,8 @@
                                 </div>
                             </div>
                             <div style="display: table; width: 100%; margin-bottom: 5px;">
-                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">DE:</div>
-                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 11pt;">DE:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 11pt; line-height: 1.15;">
                                     <t t-if="doc.send_department_id.manager_id">
                                         <span t-field="doc.send_department_id.manager_id.name"/><br/>
                                     </t>
@@ -565,26 +663,24 @@
                                 </div>
                             </div>
                             <div style="display: table; width: 100%; margin-bottom: 5px;">
-                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">ASUNTO:</div>
-                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 11pt;">ASUNTO:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 11pt; line-height: 1.15;">
                                     <span t-field="doc.name"/>
                                 </div>
                             </div>
                             <div style="display: table; width: 100%; margin-bottom: 0px;">
-                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 12pt;">FECHA:</div>
-                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 12pt; line-height: 1.2;">
+                                <div style="display: table-cell; width: 15%; font-weight: bold; vertical-align: top; font-size: 11pt;">FECHA:</div>
+                                <div style="display: table-cell; width: 85%; font-weight: bold; text-transform: uppercase; vertical-align: top; font-size: 11pt; line-height: 1.15;">
                                     <span t-field="doc.date_formatted_spanish"/>
                                 </div>
                             </div>
                         </div>
-                        <div id="description_content" style="font-size: 12pt; line-height: 1.15; text-align: justify;" t-out="doc.descripcion"/>
+                        <div id="description_content" style="font-size: 11pt; line-height: 1.1; text-align: justify;" t-out="doc.get_full_body_html()"/>
                         <div class="row mt-0" t-if="doc.observaciones">
-                            <div class="col-12" style="font-size: 12pt;"><strong>Observaciones:</strong><p t-field="doc.observaciones"/></div>
+                            <div class="col-12" style="font-size: 11pt;"><strong>Observaciones:</strong><p t-field="doc.observaciones"/></div>
                         </div>
                         <t t-call="correspondence.report_signature_stamp"/>
-                        <p style="font-size: 9pt; font-style: italic; font-weight: normal; margin-top: 15pt; text-align: left; color: #000000;">
-                            <span t-field="doc.author_initials"/>
-                        </p>
+                        <t t-call="correspondence.report_cc_initials_and_annexes"/>
                     </div>
                 </t>
             </t>

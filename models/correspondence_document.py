@@ -1,10 +1,15 @@
 
 # -*- coding: utf-8 -*-
 import base64
+import io
+import re
 import secrets
+import zipfile
+from html import escape
+from html.parser import HTMLParser
 import werkzeug.urls
 from odoo import models, fields, api, _
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, AccessError
 
 def _get_recipient_department_domain(self):
     """Devuelve un dominiO."""
@@ -52,8 +57,95 @@ class correspondence_document(models.Model):
     
     # Campo para vincular con la entidad externa (res.partner)
     external_partner_id = fields.Many2one('res.partner', string="Entidad Externa")
+    external_partner_ids = fields.Many2many(
+        'res.partner',
+        'correspondence_doc_ext_partner_rel',
+        'document_id',
+        'partner_id',
+        string="Destinatarios Externos",
+        help="Permite dirigir el oficio a uno o varios contactos/instituciones externas."
+    )
     # Campo relacionado para mostrar la dirección del partner, útil en los reportes.
     external_address = fields.Char(string="Dirección Externa", related='external_partner_id.contact_address', readonly=True)
+
+    # Vocativo y tratamiento de destinatarios en Oficios
+    recipient_treatment = fields.Selection([
+        ('ciudadano', 'Ciudadano:'),
+        ('ciudadana', 'Ciudadana:'),
+        ('ciudadanos', 'Ciudadanos:'),
+        ('ciudadanas', 'Ciudadanas:'),
+    ], string="Vocativo Destinatario", default='ciudadano', required=True)
+
+    recipient_closing = fields.Selection([
+        ('su_despacho', 'Su Despacho. -'),
+        ('presente', 'Presente. -'),
+        ('sus_manos', 'En sus manos. -'),
+    ], string="Cierre Destinatario", default='su_despacho', required=True)
+
+    include_recipient_title = fields.Boolean(
+        string="Incluir Título Profesional en Destinatario",
+        default=False,
+        help="Por norma de Dirección Ejecutiva se omiten títulos profesionales (Lic., Ing., etc.) salvo para autoridades de alto nivel."
+    )
+
+    # Campos "Con Copia" (C.c.)
+    cc_department_ids = fields.Many2many(
+        'hr.department',
+        'correspondence_doc_cc_dept_rel',
+        'document_id',
+        'department_id',
+        string="Con Copia (Departamentos / Coordinaciones)",
+        domain=_get_recipient_department_domain
+    )
+    cc_partner_ids = fields.Many2many(
+        'res.partner',
+        'correspondence_doc_cc_partner_rel',
+        'document_id',
+        'partner_id',
+        string="Con Copia (Contactos Externos)"
+    )
+
+    # Saludo y Despedida Institucional Fijos (Bloqueados para usuarios estándar)
+    use_institutional_greeting = fields.Boolean(
+        string="Incluir Saludo y Despedida Institucional Fijos",
+        default=True,
+        help="Inserta automáticamente el saludo y la despedida oficial de Presidencia/CENIPA sin permitir alteraciones."
+    )
+    institutional_greeting = fields.Html(
+        related='correspondence_type.default_greeting',
+        string="Saludo Institucional Oficial (Fijo)",
+        readonly=True
+    )
+    institutional_farewell = fields.Html(
+        related='correspondence_type.default_farewell',
+        string="Despedida Institucional Oficial (Fija)",
+        readonly=True
+    )
+
+    # Pestaña de Anexos Impresos (Posterior a la Firma) y Numeración de Páginas
+    tiene_anexos = fields.Boolean(
+        string="¿Contiene Anexos Impresos?",
+        default=False,
+        help="Activa la pestaña de Anexos que se imprimirán en páginas posteriores a la firma del documento manteniendo cintillo y correlativo."
+    )
+    anexos_html = fields.Html(
+        string="Contenido de Anexos (Posterior a la Firma)",
+        sanitize=False,
+        help="Tablas, matrices, informes o imágenes (Cédula/RIF) que se imprimirán después del bloque de firma."
+    )
+    show_page_numbers = fields.Boolean(
+        string="Mostrar Numeración de Páginas",
+        default=True
+    )
+    manual_total_pages = fields.Integer(
+        string="Total de Páginas Manual (0 = Automático)",
+        default=0,
+        help="Si es 0, el sistema calcula el total de páginas automáticamente (ej. 1 de 1). Si indica un número mayor a 0, se usará como total (ej. 1 de 20) cuando anexe hojas físicas externas."
+    )
+
+    # Exportación Editable (.docx)
+    docx_file = fields.Binary(string="Archivo Word Editable (.docx)", attachment=True, copy=False)
+    docx_filename = fields.Char(string="Nombre Archivo Editable", copy=False)
 
 
     # Campo para correspondencia saliente
@@ -94,12 +186,157 @@ class correspondence_document(models.Model):
     author_initials = fields.Char(
         string="Iniciales", compute="_compute_author_initials")
 
-    @api.onchange('correspondence_type')
+    @api.onchange('correspondence_type', 'use_institutional_greeting')
     def _onchange_correspondence_type_template(self):
-        if self.correspondence_type and not self.descripcion:
+        if self.correspondence_type and not self.descripcion and not self.use_institutional_greeting:
             greeting = self.correspondence_type.default_greeting or ''
             farewell = self.correspondence_type.default_farewell or ''
             self.descripcion = f"{greeting}<p><br/></p>{farewell}"
+
+    @api.onchange('external_partner_ids', 'external_partner_id', 'recipient_department_ids')
+    def _onchange_recipients_sync_treatment(self):
+        if self.external_partner_ids and not self.external_partner_id:
+            self.external_partner_id = self.external_partner_ids[0]
+        elif self.external_partner_ids and self.external_partner_id not in self.external_partner_ids:
+            self.external_partner_id = self.external_partner_ids[0]
+
+        total_rec = len(self.external_partner_ids) if self.external_partner_ids else (1 if self.external_partner_id else len(self.recipient_department_ids))
+        if total_rec > 1:
+            if self.recipient_treatment == 'ciudadano':
+                self.recipient_treatment = 'ciudadanos'
+            elif self.recipient_treatment == 'ciudadana':
+                self.recipient_treatment = 'ciudadanas'
+        elif total_rec == 1:
+            if self.recipient_treatment == 'ciudadanos':
+                self.recipient_treatment = 'ciudadano'
+            elif self.recipient_treatment == 'ciudadanas':
+                self.recipient_treatment = 'ciudadana'
+
+    def _strip_professional_title(self, full_name):
+        """
+        Limpia prefijos profesionales (Lic., Ing., Dr., MSc., etc.) cuando
+        include_recipient_title=False y retorna el nombre en MAYÚSCULAS.
+        """
+        if not full_name:
+            return ""
+        text = str(full_name).strip().upper()
+        if not self.include_recipient_title:
+            text = re.sub(
+                r'^(LICDO\.?|LICDA\.?|LIC\.?|ING\.?|DR\.?|DRA\.?|MSC\.?|MGSC\.?|ESP\.?|TSU\.?|ABG\.?|ABOG\.?|ECON\.?|ADM\.?|PROF\.?|PROFA\.?|CNEL\.?|GRAL\.?|CAP\.?|TTE\.?)\s+',
+                '',
+                text,
+                flags=re.IGNORECASE,
+            ).strip()
+        return text
+
+    def get_recipient_treatment_label(self):
+        self.ensure_one()
+        labels = {
+            'ciudadano': 'Ciudadano:',
+            'ciudadana': 'Ciudadana:',
+            'ciudadanos': 'Ciudadanos:',
+            'ciudadanas': 'Ciudadanas:',
+        }
+        return labels.get(self.recipient_treatment or 'ciudadano', 'Ciudadano:')
+
+    def get_recipient_closing_label(self):
+        self.ensure_one()
+        labels = {
+            'su_despacho': 'Su Despacho. -',
+            'presente': 'Presente. -',
+            'sus_manos': 'En sus manos. -',
+        }
+        return labels.get(self.recipient_closing or 'su_despacho', 'Su Despacho. -')
+
+    def get_formatted_recipients_list(self):
+        """
+        Devuelve la lista estructurada de destinatarios (externos o internos)
+        en MAYÚSCULAS con Nombre, Cargo e Institución para Oficios, Memorandos y Circulares.
+        """
+        self.ensure_one()
+        recipients = []
+        partners = self.external_partner_ids or self.external_partner_id
+        if partners:
+            for p in partners:
+                name_clean = self._strip_professional_title(p.name)
+                job_clean = (p.function or '').strip().upper()
+                inst_clean = (p.parent_id.name if p.parent_id else (p.company_name or '')).strip().upper()
+                addr_clean = (p.street or '').strip()
+                recipients.append({
+                    'name': name_clean,
+                    'job': job_clean,
+                    'institution': inst_clean,
+                    'address': addr_clean,
+                })
+        if self.recipient_department_ids and (not partners or self.correspondence_flow == 'internal'):
+            for dept in self.recipient_department_ids:
+                mgr = dept.manager_id
+                name_clean = self._strip_professional_title(mgr.name if mgr else dept.name)
+                job_clean = (mgr.job_id.name if (mgr and mgr.job_id) else dept.name or '').strip().upper()
+                inst_clean = "CENTRO NACIONAL DE INVESTIGACIÓN DE PESCA Y ACUICULTURA (CENIPA)"
+                recipients.append({
+                    'name': name_clean,
+                    'job': job_clean,
+                    'institution': inst_clean,
+                    'address': '',
+                })
+        return recipients
+
+    def get_formatted_cc_list(self):
+        """
+        Devuelve la lista de destinatarios 'Con Copia' (C.c.) internos y externos
+        con Nombre, Cargo e Institución en MAYÚSCULAS.
+        """
+        self.ensure_one()
+        cc_list = []
+        for dept in self.cc_department_ids:
+            mgr = dept.manager_id
+            name_clean = self._strip_professional_title(mgr.name if mgr else dept.name)
+            job_clean = (mgr.job_id.name if (mgr and mgr.job_id) else dept.name or '').strip().upper()
+            cc_list.append({
+                'name': name_clean,
+                'job': job_clean,
+                'institution': "CENTRO NACIONAL DE INVESTIGACIÓN DE PESCA Y ACUICULTURA (CENIPA)",
+            })
+        for p in self.cc_partner_ids:
+            name_clean = self._strip_professional_title(p.name)
+            job_clean = (p.function or '').strip().upper()
+            inst_clean = (p.parent_id.name if p.parent_id else (p.company_name or '')).strip().upper()
+            cc_list.append({
+                'name': name_clean,
+                'job': job_clean,
+                'institution': inst_clean,
+            })
+        return cc_list
+
+    def get_full_body_html(self):
+        """
+        Retorna el cuerpo HTML completo inyectando el saludo y la despedida institucional
+        fijos (cuando use_institutional_greeting=True) sin duplicarlos si ya existían en descripcion.
+        """
+        self.ensure_one()
+        body = str(self.descripcion or '').strip()
+        if not self.use_institutional_greeting or not self.correspondence_type:
+            return body
+
+        greeting = str(self.correspondence_type.default_greeting or '').strip()
+        farewell = str(self.correspondence_type.default_farewell or '').strip()
+
+        def plain_text(html_fragment):
+            return re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', html_fragment or '')).strip().lower()
+
+        body_plain = plain_text(body)
+        greet_plain = plain_text(greeting)
+        farewell_plain = plain_text(farewell)
+
+        parts = []
+        if greeting and (not greet_plain or greet_plain[:45] not in body_plain):
+            parts.append(greeting)
+        if body:
+            parts.append(body)
+        if farewell and (not farewell_plain or farewell_plain[:35] not in body_plain):
+            parts.append(farewell)
+        return "\n".join(parts)
 
     @api.depends('date')
     def _compute_formatted_dates(self):
@@ -264,7 +501,22 @@ class correspondence_document(models.Model):
         }
 
     def action_reset_to_draft(self):
-        """Devuelve el documento al estado Borrador (o Recibido si es entrante) para permitir su modificación."""
+        """
+        Devuelve el documento al estado Borrador (o Recibido si es entrante)
+        conservando su correlativo para permitir su modificación o reutilización autorizada.
+        Restringido exclusivamente a Directores y Administradores de Correspondencia.
+        """
+        user = self.env.user
+        is_authorized = (
+            user.has_group('correspondence.correspondence_group_director')
+            or user.has_group('correspondence.correspondence_group_admin')
+            or user.has_group('base.group_system')
+        )
+        if not is_authorized:
+            raise AccessError(_(
+                "Solo el personal autorizado de Dirección Ejecutiva / Directores puede devolver un documento aprobado a borrador o reutilizar su correlativo."
+            ))
+
         for doc in self:
             target_state = 'received' if doc.correspondence_flow == 'incoming' else 'draft'
             doc.write({
@@ -276,12 +528,322 @@ class correspondence_document(models.Model):
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': _('Devuelto a Borrador'),
-                'message': _('El documento fue devuelto a borrador y ahora puede ser modificado.'),
+                'title': _('Devuelto a Borrador (Correlativo Preservado)'),
+                'message': _('El documento fue devuelto a borrador conservando su número correlativo. Ahora puede modificar fecha, destinatarios, asunto y contenido.'),
                 'type': 'info',
                 'sticky': False,
                 'next': {'type': 'ir.actions.client', 'tag': 'reload'},
             }
+        }
+
+    def _html_to_ooxml_elements(self, html_content):
+        """
+        Convierte un fragmento HTML (párrafos y tablas) en bloques XML nativos de Word (w:p y w:tbl)
+        con fuente Georama 11pt, sin interlineado excesivo, separación entre párrafos y tablas con
+        encabezado azul institucional (#002060).
+        """
+        if not html_content:
+            return ""
+
+        class _OOXMLHTMLParser(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.elements = []
+                self.in_table = False
+                self.table_rows = []
+                self.current_row = []
+                self.in_cell = False
+                self.cell_is_header = False
+                self.current_cell_text = []
+                self.current_p_runs = []
+                self.bold_stack = 0
+                self.italic_stack = 0
+                self.underline_stack = 0
+
+            def _flush_paragraph(self, align="both"):
+                text_check = "".join(t for t, _b, _i, _u in self.current_p_runs).strip()
+                if not text_check:
+                    self.current_p_runs = []
+                    return
+                runs_xml = []
+                for txt, is_b, is_i, is_u in self.current_p_runs:
+                    if not txt:
+                        continue
+                    rpr = [
+                        '<w:rFonts w:ascii="Georama" w:hAnsi="Georama" w:cs="Georama"/>',
+                        '<w:sz w:val="22"/><w:szCs w:val="22"/>',
+                    ]
+                    if is_b:
+                        rpr.append('<w:b/>')
+                    if is_i:
+                        rpr.append('<w:i/>')
+                    if is_u:
+                        rpr.append('<w:u w:val="single"/>')
+                    runs_xml.append(
+                        f'<w:r><w:rPr>{"".join(rpr)}</w:rPr>'
+                        f'<w:t xml:space="preserve">{escape(txt)}</w:t></w:r>'
+                    )
+                p_xml = (
+                    f'<w:p><w:pPr><w:spacing w:before="0" w:after="160" w:line="240" w:lineRule="auto"/>'
+                    f'<w:jc w:val="{align}"/></w:pPr>{"".join(runs_xml)}</w:p>'
+                )
+                self.elements.append(p_xml)
+                self.current_p_runs = []
+
+            def handle_starttag(self, tag, attrs):
+                t = tag.lower()
+                if t == 'table':
+                    self._flush_paragraph()
+                    self.in_table = True
+                    self.table_rows = []
+                elif t == 'tr' and self.in_table:
+                    self.current_row = []
+                elif t in ('th', 'td') and self.in_table:
+                    self.in_cell = True
+                    self.cell_is_header = (t == 'th')
+                    self.current_cell_text = []
+                elif t in ('b', 'strong'):
+                    self.bold_stack += 1
+                elif t in ('i', 'em'):
+                    self.italic_stack += 1
+                elif t == 'u':
+                    self.underline_stack += 1
+                elif t == 'br':
+                    if self.in_cell:
+                        self.current_cell_text.append(" ")
+                    else:
+                        self._flush_paragraph()
+                elif t in ('p', 'div', 'li', 'h1', 'h2', 'h3', 'h4'):
+                    if not self.in_table:
+                        self._flush_paragraph()
+
+            def handle_endtag(self, tag):
+                t = tag.lower()
+                if t in ('b', 'strong'):
+                    self.bold_stack = max(0, self.bold_stack - 1)
+                elif t in ('i', 'em'):
+                    self.italic_stack = max(0, self.italic_stack - 1)
+                elif t == 'u':
+                    self.underline_stack = max(0, self.underline_stack - 1)
+                elif t in ('th', 'td') and self.in_cell:
+                    cell_txt = " ".join("".join(self.current_cell_text).split())
+                    self.current_row.append((cell_txt, self.cell_is_header))
+                    self.in_cell = False
+                elif t == 'tr' and self.in_table:
+                    if self.current_row:
+                        self.table_rows.append(self.current_row)
+                    self.current_row = []
+                elif t == 'table' and self.in_table:
+                    self.in_table = False
+                    if self.table_rows:
+                        rows_xml = []
+                        for r_idx, row in enumerate(self.table_rows):
+                            is_hdr_row = (r_idx == 0) or all(is_h for _c, is_h in row)
+                            cells_xml = []
+                            for cell_txt, is_h in row:
+                                hdr = is_hdr_row or is_h
+                                fill = "002060" if hdr else "FFFFFF"
+                                color = "FFFFFF" if hdr else "000000"
+                                b_tag = "<w:b/>" if hdr else ""
+                                jc = "center" if hdr else "left"
+                                cells_xml.append(
+                                    f'<w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="{fill}"/>'
+                                    f'<w:tcMar><w:top w:w="80" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/>'
+                                    f'<w:left w:w="120" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar>'
+                                    f'</w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>'
+                                    f'<w:jc w:val="{jc}"/></w:pPr><w:r><w:rPr>'
+                                    f'<w:rFonts w:ascii="Georama" w:hAnsi="Georama" w:cs="Georama"/>'
+                                    f'<w:sz w:val="20"/><w:szCs w:val="20"/><w:color w:val="{color}"/>{b_tag}'
+                                    f'</w:rPr><w:t xml:space="preserve">{escape(cell_txt)}</w:t></w:r></w:p></w:tc>'
+                                )
+                            rows_xml.append(f'<w:tr><w:trPr><w:cantSplit/></w:trPr>{"".join(cells_xml)}</w:tr>')
+                        tbl_xml = (
+                            '<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/>'
+                            '<w:tblBorders>'
+                            '<w:top w:val="single" w:sz="6" w:space="0" w:color="002060"/>'
+                            '<w:left w:val="single" w:sz="6" w:space="0" w:color="333333"/>'
+                            '<w:bottom w:val="single" w:sz="6" w:space="0" w:color="333333"/>'
+                            '<w:right w:val="single" w:sz="6" w:space="0" w:color="333333"/>'
+                            '<w:insideH w:val="single" w:sz="4" w:space="0" w:color="333333"/>'
+                            '<w:insideV w:val="single" w:sz="4" w:space="0" w:color="333333"/>'
+                            '</w:tblBorders></w:tblPr>'
+                            f'{"".join(rows_xml)}</w:tbl>'
+                            '<w:p><w:pPr><w:spacing w:before="0" w:after="120"/></w:pPr></w:p>'
+                        )
+                        self.elements.append(tbl_xml)
+                elif t in ('p', 'div', 'li', 'h1', 'h2', 'h3', 'h4'):
+                    if not self.in_table:
+                        self._flush_paragraph()
+
+            def handle_data(self, data):
+                if not data:
+                    return
+                if self.in_cell:
+                    self.current_cell_text.append(data)
+                else:
+                    clean = re.sub(r'\s+', ' ', data)
+                    if clean:
+                        self.current_p_runs.append((
+                            clean,
+                            self.bold_stack > 0,
+                            self.italic_stack > 0,
+                            self.underline_stack > 0,
+                        ))
+
+        parser = _OOXMLHTMLParser()
+        parser.feed(str(html_content))
+        parser._flush_paragraph()
+        return "".join(parser.elements)
+
+    def _build_docx_bytes(self):
+        """
+        Construye en memoria un archivo Word (.docx) OpenXML nativo con el formato
+        oficial CENIPA (Georama 11pt, azul institucional #002060, destinatarios en mayúscula,
+        tablas estilizadas, firma, sección Con Copia y salto de página para Anexos).
+        """
+        self.ensure_one()
+
+        def make_p(text, bold=False, italic=False, underline=False, color="000000", sz=22, align="left", after=60, before=0):
+            rpr = [
+                '<w:rFonts w:ascii="Georama" w:hAnsi="Georama" w:cs="Georama"/>',
+                f'<w:sz w:val="{sz}"/><w:szCs w:val="{sz}"/>',
+                f'<w:color w:val="{color}"/>',
+            ]
+            if bold:
+                rpr.append('<w:b/>')
+            if italic:
+                rpr.append('<w:i/>')
+            if underline:
+                rpr.append('<w:u w:val="single"/>')
+            return (
+                f'<w:p><w:pPr><w:spacing w:before="{before}" w:after="{after}" w:line="240" w:lineRule="auto"/>'
+                f'<w:jc w:val="{align}"/></w:pPr>'
+                f'<w:r><w:rPr>{"".join(rpr)}</w:rPr><w:t xml:space="preserve">{escape(str(text or ""))}</w:t></w:r></w:p>'
+            )
+
+        body_parts = []
+        is_oficio = 'OFI' in (self.correspondence_type.prefix or '').upper() or 'OFICIO' in (self.correspondence_type.name or '').upper()
+
+        # 1. Correlativo y Fecha
+        body_parts.append(make_p(self.correlative or '', bold=True, color="002060", sz=26, align="left", after=40))
+        if is_oficio:
+            body_parts.append(make_p(self.date_formatted_spanish_long or '', bold=True, color="000000", sz=22, align="right", after=240))
+            # Vocativo y Destinatarios en Azul Institucional (#002060) y Mayúsculas
+            body_parts.append(make_p(self.get_recipient_treatment_label(), bold=True, color="000000", sz=22, align="left", after=60))
+            for rec in self.get_formatted_recipients_list():
+                if rec.get('name'):
+                    body_parts.append(make_p(rec['name'], bold=True, color="002060", sz=22, align="left", after=20))
+                if rec.get('job'):
+                    body_parts.append(make_p(rec['job'], bold=True, color="002060", sz=22, align="left", after=20))
+                if rec.get('institution'):
+                    body_parts.append(make_p(rec['institution'], bold=True, color="002060", sz=22, align="left", after=80))
+            body_parts.append(make_p(self.get_recipient_closing_label(), bold=True, color="000000", sz=22, align="left", after=240))
+        else:
+            doc_title = (self.correspondence_type.name or 'MEMORANDO').upper()
+            body_parts.append(make_p(doc_title, bold=True, underline=True, color="002060", sz=26, align="center", after=180))
+            mgr = self.send_department_id.manager_id
+            de_line = f"DE: {(mgr.name if mgr else self.send_department_id.name or '').upper()} - {(mgr.job_id.name if (mgr and mgr.job_id) else self.send_department_id.name or '').upper()}"
+            body_parts.append(make_p(de_line, bold=True, color="000000", sz=22, align="left", after=60))
+            rec_names = [f"{r['name']} ({r['job']})" for r in self.get_formatted_recipients_list()]
+            para_line = f"PARA: {', '.join(rec_names) if rec_names else 'TODO EL PERSONAL'}"
+            body_parts.append(make_p(para_line, bold=True, color="000000", sz=22, align="left", after=60))
+            body_parts.append(make_p(f"ASUNTO: {(self.name or '').upper()}", bold=True, color="000000", sz=22, align="left", after=60))
+            body_parts.append(make_p(f"FECHA: {self.date_formatted_spanish or ''}", bold=True, color="000000", sz=22, align="left", after=240))
+
+        # 2. Cuerpo del Documento (con Saludo y Despedida Fijos)
+        body_parts.append(self._html_to_ooxml_elements(self.get_full_body_html()))
+
+        # 3. Bloque de Firma
+        mgr = self.send_department_id.manager_id
+        signer_name = (mgr.name if mgr else (self.author_id.name if not is_oficio else "ERIC RICARDO MARTÍNEZ GÓMEZ")).upper()
+        signer_job = (mgr.job_id.name if (mgr and mgr.job_id) else (self.send_department_id.name if not is_oficio else "DIRECTOR EJECUTIVO")).upper()
+        body_parts.append(make_p(signer_name, bold=True, color="002060", sz=24, align="center", before=360, after=20))
+        body_parts.append(make_p(signer_job, bold=True, color="002060", sz=20, align="center", after=20))
+        body_parts.append(make_p("CENTRO NACIONAL DE INVESTIGACIÓN DE PESCA Y ACUICULTURA (CENIPA)", bold=True, color="002060", sz=20, align="center", after=40))
+        if is_oficio:
+            gaceta_txt = (
+                "Decreto N° 4.807, publicado en la Gaceta Oficial de la República Bolivariana de Venezuela N° 42.634 "
+                "de fecha 23 de mayo de 2023. Delegación atribuida en el artículo 1, numeral 2 Resolución DM/N° 005-24 "
+                "publicada en la Gaceta Oficial de la República Bolivariana de Venezuela N° 42.942 de fecha 15 de agosto de 2.024"
+            )
+            body_parts.append(make_p(gaceta_txt, bold=False, color="000000", sz=16, align="center", after=160))
+
+        # 4. Bloque Con Copia (C.c.)
+        cc_items = self.get_formatted_cc_list()
+        if cc_items:
+            body_parts.append(make_p("C.c.:", bold=True, color="000000", sz=18, align="left", before=120, after=20))
+            for cc in cc_items:
+                cc_line = " - ".join([x for x in (cc.get('name'), cc.get('job'), cc.get('institution')) if x])
+                body_parts.append(make_p(cc_line, bold=True, color="002060", sz=18, align="left", after=20))
+
+        # 5. Iniciales
+        body_parts.append(make_p(self.author_initials or '', italic=True, color="000000", sz=18, align="left", before=160, after=120))
+
+        # 6. Pestaña de Anexos (Salto de página posterior a la firma)
+        if self.tiene_anexos and self.anexos_html:
+            body_parts.append('<w:p><w:r><w:br w:type="page"/></w:r></w:p>')
+            body_parts.append(make_p(f"ANEXO AL DOCUMENTO: {self.correlative or ''}", bold=True, color="002060", sz=24, align="left", after=160))
+            body_parts.append(self._html_to_ooxml_elements(self.anexos_html))
+
+        page_h = "20160" if is_oficio else "15840"  # Legal (Oficio) vs Letter (Carta) en twips
+        sect_pr = (
+            f'<w:sectPr><w:pgSz w:w="12240" w:h="{page_h}"/>'
+            '<w:pgMar w:top="1758" w:right="1440" w:bottom="2200" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>'
+            '</w:sectPr>'
+        )
+
+        document_xml = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            f'<w:body>{"".join(body_parts)}{sect_pr}</w:body></w:document>'
+        )
+
+        content_types_xml = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            '<Default Extension="xml" ContentType="application/xml"/>'
+            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+            '</Types>'
+        )
+
+        rels_xml = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+            '</Relationships>'
+        )
+
+        doc_rels_xml = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'
+        )
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr('[Content_Types].xml', content_types_xml)
+            zf.writestr('_rels/.rels', rels_xml)
+            zf.writestr('word/_rels/document.xml.rels', doc_rels_xml)
+            zf.writestr('word/document.xml', document_xml.encode('utf-8'))
+        return buf.getvalue()
+
+    def action_download_docx(self):
+        """
+        Genera y descarga el documento en formato editable Word (.docx)
+        manteniendo la estructura oficial de Correspondencia CENIPA.
+        """
+        self.ensure_one()
+        docx_bytes = self._build_docx_bytes()
+        clean_corr = (self.correlative or 'Documento').replace('/', '-')
+        fname = f"{clean_corr}.docx"
+        self.write({
+            'docx_file': base64.b64encode(docx_bytes),
+            'docx_filename': fname,
+        })
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/{self._name}/{self.id}/docx_file/{fname}?download=true',
+            'target': 'self',
         }
 
     def action_send(self):
@@ -410,6 +972,11 @@ class correspondence_document(models.Model):
         if new_document.parent_document_id:
             # Cambiamos el estado del documento padre a 'Respondido'
             new_document.parent_document_id.write({'state': 'replied'})
+
+        if new_document.external_partner_ids and not new_document.external_partner_id:
+            new_document.write({'external_partner_id': new_document.external_partner_ids[0].id})
+        elif new_document.external_partner_id and not new_document.external_partner_ids:
+            new_document.write({'external_partner_ids': [(4, new_document.external_partner_id.id)]})
 
         return new_document
 

@@ -24,6 +24,7 @@
         'report/correspondence_report.xml',
         ## Data
         'data/correspondence_type_data.xml',
+        'data/correspondence_partners_data.xml',
         'data/ir_sequence_data.xml',
         ## Wizards
         'wizard/upload_signed_document_wizard_view.xml',
