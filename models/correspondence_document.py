@@ -2,14 +2,18 @@
 # -*- coding: utf-8 -*-
 import base64
 import io
+import os
 import re
 import secrets
 import zipfile
-from html import escape
+from html import escape, unescape
 from html.parser import HTMLParser
+from markupsafe import Markup
+from PIL import Image, ImageDraw, ImageFont
 import werkzeug.urls
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, AccessError
+from odoo.modules.module import get_module_resource
 
 def _get_recipient_department_domain(self):
     """Devuelve un dominiO."""
@@ -311,19 +315,35 @@ class correspondence_document(models.Model):
 
     def get_full_body_html(self):
         """
-        Retorna el cuerpo HTML completo inyectando el saludo y la despedida institucional
-        fijos (cuando use_institutional_greeting=True) sin duplicarlos si ya existían en descripcion.
+        Retorna el cuerpo HTML completo como objeto Markup (para renderizado directo en QWeb t-out)
+        inyectando el saludo y la despedida institucional fijos (cuando use_institutional_greeting=True)
+        sin duplicarlos si ya existían en descripcion, y limpiando párrafos vacíos (<p>&nbsp;</p>).
         """
         self.ensure_one()
-        body = str(self.descripcion or '').strip()
-        if not self.use_institutional_greeting or not self.correspondence_type:
-            return body
 
-        greeting = str(self.correspondence_type.default_greeting or '').strip()
-        farewell = str(self.correspondence_type.default_farewell or '').strip()
+        def normalize_html_paragraphs(raw_html):
+            if not raw_html:
+                return ""
+            cleaned = str(raw_html).strip()
+            cleaned = re.sub(r'<div(\b[^>]*)>', r'<p\1>', cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r'</div>', '</p>', cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(
+                r'<p[^>]*>(?:\s|&nbsp;|\u00a0|<br\s*/?>)*</p>',
+                '',
+                cleaned,
+                flags=re.IGNORECASE,
+            )
+            return cleaned.strip()
+
+        body = normalize_html_paragraphs(self.descripcion)
+        if not self.use_institutional_greeting or not self.correspondence_type:
+            return Markup(body)
+
+        greeting = normalize_html_paragraphs(self.correspondence_type.default_greeting)
+        farewell = normalize_html_paragraphs(self.correspondence_type.default_farewell)
 
         def plain_text(html_fragment):
-            return re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', html_fragment or '')).strip().lower()
+            return re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', unescape(html_fragment or ''))).strip().lower()
 
         body_plain = plain_text(body)
         greet_plain = plain_text(greeting)
@@ -336,7 +356,7 @@ class correspondence_document(models.Model):
             parts.append(body)
         if farewell and (not farewell_plain or farewell_plain[:35] not in body_plain):
             parts.append(farewell)
-        return "\n".join(parts)
+        return Markup("\n".join(parts))
 
     @api.depends('date')
     def _compute_formatted_dates(self):
@@ -695,11 +715,107 @@ class correspondence_document(models.Model):
         parser._flush_paragraph()
         return "".join(parser.elements)
 
+    def _build_header_png_bytes(self):
+        """
+        Compone en memoria la imagen del cintillo superior institucional (1920x210 PNG)
+        combinando el logo izquierdo (Ministerio / company.logo) y el logo derecho (CENIPA).
+        """
+        canvas = Image.new("RGBA", (1920, 210), (255, 255, 255, 255))
+        left_img = None
+        if self.company_id and self.company_id.logo:
+            try:
+                left_img = Image.open(io.BytesIO(base64.b64decode(self.company_id.logo))).convert("RGBA")
+            except Exception:
+                left_img = None
+        if left_img is None:
+            left_path = get_module_resource('correspondence', 'static/src/img', 'logo-izquierda.png')
+            if left_path and os.path.exists(left_path):
+                left_img = Image.open(left_path).convert("RGBA")
+
+        if left_img is not None:
+            target_h = 175
+            ratio = target_h / float(left_img.height or 1)
+            target_w = max(1, int(left_img.width * ratio))
+            left_resized = left_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+            canvas.paste(left_resized, (0, 18), left_resized)
+
+        right_path = get_module_resource('correspondence', 'static/src/img', 'logo-derecha.png')
+        if right_path and os.path.exists(right_path):
+            right_img = Image.open(right_path).convert("RGBA")
+            target_h = 175
+            ratio = target_h / float(right_img.height or 1)
+            target_w = max(1, int(right_img.width * ratio))
+            right_resized = right_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+            canvas.paste(right_resized, (max(0, 1920 - target_w), 18), right_resized)
+
+        out = io.BytesIO()
+        canvas.convert("RGB").save(out, format="PNG")
+        return out.getvalue()
+
+    def _build_footer_png_bytes(self):
+        """
+        Compone en memoria la imagen del pie de página institucional (1920x405 PNG)
+        combinando el cintillo ondas (footer.png), el código QR de verificación y los datos de contacto.
+        """
+        canvas = Image.new("RGBA", (1920, 405), (255, 255, 255, 255))
+        footer_path = get_module_resource('correspondence', 'static/src/img', 'footer.png')
+        if footer_path and os.path.exists(footer_path):
+            f_img = Image.open(footer_path).convert("RGBA").resize((1920, 405), Image.Resampling.LANCZOS)
+            canvas.paste(f_img, (0, 0), f_img)
+
+        draw = ImageDraw.Draw(canvas)
+        qr_data_uri = self.get_qr_code_url()
+        if qr_data_uri and "," in qr_data_uri:
+            try:
+                qr_raw = base64.b64decode(qr_data_uri.split(",", 1)[1])
+                qr_img = Image.open(io.BytesIO(qr_raw)).convert("RGBA").resize((185, 185), Image.Resampling.LANCZOS)
+                draw.rounded_rectangle([(42, 190), (247, 395)], radius=20, fill=(255, 255, 255, 255))
+                canvas.paste(qr_img, (52, 200), qr_img)
+            except Exception:
+                pass
+
+        font_bold = None
+        font_small = None
+        for font_candidate in (
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        ):
+            if os.path.exists(font_candidate):
+                try:
+                    font_bold = ImageFont.truetype(font_candidate, 24)
+                    font_small = ImageFont.truetype(font_candidate, 20)
+                    break
+                except Exception:
+                    pass
+        if font_bold is None:
+            font_bold = ImageFont.load_default()
+            font_small = ImageFont.load_default()
+
+        draw.text((280, 242), "Tel: 0212-5072911 ext 8049", fill=(0, 0, 0, 255), font=font_bold)
+        draw.text((280, 280), "Redes: @cenipave", fill=(0, 0, 0, 255), font=font_bold)
+        draw.text(
+            (280, 320),
+            "Caracas, Dto. Metropolitano, Municipio Libertador, Av. Lecuna,",
+            fill=(0, 0, 0, 255),
+            font=font_small,
+        )
+        draw.text(
+            (280, 348),
+            "Parque Central, Torre Este, Piso 22",
+            fill=(0, 0, 0, 255),
+            font=font_small,
+        )
+
+        out = io.BytesIO()
+        canvas.convert("RGB").save(out, format="PNG")
+        return out.getvalue()
+
     def _build_docx_bytes(self):
         """
         Construye en memoria un archivo Word (.docx) OpenXML nativo con el formato
-        oficial CENIPA (Georama 11pt, azul institucional #002060, destinatarios en mayúscula,
-        tablas estilizadas, firma, sección Con Copia y salto de página para Anexos).
+        oficial CENIPA (Encabezado y Pie de página con imágenes, Georama 11pt, azul
+        institucional #002060, destinatarios en mayúscula, tablas estilizadas, firma,
+        sección Con Copia y salto de página para Anexos).
         """
         self.ensure_one()
 
@@ -785,16 +901,82 @@ class correspondence_document(models.Model):
             body_parts.append(make_p(f"ANEXO AL DOCUMENTO: {self.correlative or ''}", bold=True, color="002060", sz=24, align="left", after=160))
             body_parts.append(self._html_to_ooxml_elements(self.anexos_html))
 
+        header_png = self._build_header_png_bytes()
+        footer_png = self._build_footer_png_bytes()
+
+        def make_drawing_xml(rel_id, doc_pr_id, name, cx, cy):
+            return (
+                '<w:drawing>'
+                '<wp:inline distT="0" distB="0" distL="0" distR="0" '
+                'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
+                'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+                'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" '
+                'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+                f'<wp:extent cx="{cx}" cy="{cy}"/>'
+                f'<wp:docPr id="{doc_pr_id}" name="{name}"/>'
+                '<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>'
+                '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+                '<pic:pic>'
+                f'<pic:nvPicPr><pic:cNvPr id="{doc_pr_id}" name="{name}"/><pic:cNvPicPr/></pic:nvPicPr>'
+                f'<pic:blipFill><a:blip r:embed="{rel_id}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+                f'<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm>'
+                '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>'
+                '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing>'
+            )
+
+        header_drawing = make_drawing_xml("rIdHdrImg1", 101, "HeaderBanner", 6217920, 680085)
+        header_xml = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            f'<w:p><w:pPr><w:spacing w:before="0" w:after="80"/><w:jc w:val="center"/></w:pPr><w:r>{header_drawing}</w:r></w:p>'
+            '</w:hdr>'
+        )
+
+        page_num_xml = ""
+        if self.show_page_numbers:
+            rpr_pg = (
+                '<w:rPr><w:rFonts w:ascii="Georama" w:hAnsi="Georama" w:cs="Georama"/>'
+                '<w:b/><w:sz w:val="17"/><w:szCs w:val="17"/><w:color w:val="002060"/></w:rPr>'
+            )
+            if self.manual_total_pages and self.manual_total_pages > 0:
+                total_part = f'<w:r>{rpr_pg}<w:t xml:space="preserve"> de {self.manual_total_pages}</w:t></w:r>'
+            else:
+                total_part = (
+                    f'<w:r>{rpr_pg}<w:t xml:space="preserve"> de </w:t></w:r>'
+                    f'<w:fldSimple w:instr="NUMPAGES"><w:r>{rpr_pg}<w:t>1</w:t></w:r></w:fldSimple>'
+                )
+            page_num_xml = (
+                '<w:p><w:pPr><w:spacing w:before="0" w:after="20"/><w:jc w:val="right"/></w:pPr>'
+                f'<w:r>{rpr_pg}<w:t xml:space="preserve">Página </w:t></w:r>'
+                f'<w:fldSimple w:instr="PAGE"><w:r>{rpr_pg}<w:t>1</w:t></w:r></w:fldSimple>'
+                f'{total_part}</w:p>'
+            )
+
+        footer_drawing = make_drawing_xml("rIdFtrImg1", 102, "FooterBanner", 6217920, 1311592)
+        footer_xml = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            f'{page_num_xml}'
+            f'<w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:jc w:val="center"/></w:pPr><w:r>{footer_drawing}</w:r></w:p>'
+            '</w:ftr>'
+        )
+
         page_h = "20160" if is_oficio else "15840"  # Legal (Oficio) vs Letter (Carta) en twips
         sect_pr = (
-            f'<w:sectPr><w:pgSz w:w="12240" w:h="{page_h}"/>'
-            '<w:pgMar w:top="1758" w:right="1440" w:bottom="2200" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>'
+            f'<w:sectPr>'
+            '<w:headerReference w:type="default" r:id="rIdHeader1"/>'
+            '<w:footerReference w:type="default" r:id="rIdFooter1"/>'
+            f'<w:pgSz w:w="12240" w:h="{page_h}"/>'
+            '<w:pgMar w:top="1758" w:right="1440" w:bottom="2300" w:left="1440" w:header="360" w:footer="240" w:gutter="0"/>'
             '</w:sectPr>'
         )
 
         document_xml = (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
             f'<w:body>{"".join(body_parts)}{sect_pr}</w:body></w:document>'
         )
 
@@ -803,7 +985,10 @@ class correspondence_document(models.Model):
             '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
             '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
             '<Default Extension="xml" ContentType="application/xml"/>'
+            '<Default Extension="png" ContentType="image/png"/>'
             '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+            '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>'
+            '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>'
             '</Types>'
         )
 
@@ -816,7 +1001,24 @@ class correspondence_document(models.Model):
 
         doc_rels_xml = (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rIdHeader1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>'
+            '<Relationship Id="rIdFooter1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>'
+            '</Relationships>'
+        )
+
+        header_rels_xml = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rIdHdrImg1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/header_banner.png"/>'
+            '</Relationships>'
+        )
+
+        footer_rels_xml = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rIdFtrImg1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/footer_banner.png"/>'
+            '</Relationships>'
         )
 
         buf = io.BytesIO()
@@ -824,6 +1026,12 @@ class correspondence_document(models.Model):
             zf.writestr('[Content_Types].xml', content_types_xml)
             zf.writestr('_rels/.rels', rels_xml)
             zf.writestr('word/_rels/document.xml.rels', doc_rels_xml)
+            zf.writestr('word/_rels/header1.xml.rels', header_rels_xml)
+            zf.writestr('word/_rels/footer1.xml.rels', footer_rels_xml)
+            zf.writestr('word/header1.xml', header_xml.encode('utf-8'))
+            zf.writestr('word/footer1.xml', footer_xml.encode('utf-8'))
+            zf.writestr('word/media/header_banner.png', header_png)
+            zf.writestr('word/media/footer_banner.png', footer_png)
             zf.writestr('word/document.xml', document_xml.encode('utf-8'))
         return buf.getvalue()
 
