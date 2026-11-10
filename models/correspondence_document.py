@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFont
 import werkzeug.urls
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, AccessError
-from odoo.modules.module import get_module_resource
+from odoo.tools.misc import file_path
 
 def _get_recipient_department_domain(self):
     """Devuelve un dominiO."""
@@ -717,10 +717,11 @@ class correspondence_document(models.Model):
 
     def _build_header_png_bytes(self):
         """
-        Compone en memoria la imagen del cintillo superior institucional (1920x210 PNG)
-        combinando el logo izquierdo (Ministerio / company.logo) y el logo derecho (CENIPA).
+        Compone en memoria la imagen del cintillo superior institucional (1920x200 PNG)
+        idéntica al encabezado PDF: logo-izquierda.png (Ministerio + CENIPA) a la izquierda
+        y logo-derecha.png (Bicentenario) a la derecha con las proporciones exactas de QWeb.
         """
-        canvas = Image.new("RGBA", (1920, 210), (255, 255, 255, 255))
+        canvas = Image.new("RGBA", (1920, 200), (255, 255, 255, 255))
         left_img = None
         if self.company_id and self.company_id.logo:
             try:
@@ -728,25 +729,31 @@ class correspondence_document(models.Model):
             except Exception:
                 left_img = None
         if left_img is None:
-            left_path = get_module_resource('correspondence', 'static/src/img', 'logo-izquierda.png')
-            if left_path and os.path.exists(left_path):
-                left_img = Image.open(left_path).convert("RGBA")
+            try:
+                left_path = file_path('correspondence/static/src/img/logo-izquierda.png')
+                if left_path and os.path.exists(left_path):
+                    left_img = Image.open(left_path).convert("RGBA")
+            except Exception:
+                left_img = None
 
         if left_img is not None:
-            target_h = 175
+            target_h = 140
             ratio = target_h / float(left_img.height or 1)
             target_w = max(1, int(left_img.width * ratio))
             left_resized = left_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
-            canvas.paste(left_resized, (0, 18), left_resized)
+            canvas.paste(left_resized, (0, 30), left_resized)
 
-        right_path = get_module_resource('correspondence', 'static/src/img', 'logo-derecha.png')
-        if right_path and os.path.exists(right_path):
-            right_img = Image.open(right_path).convert("RGBA")
-            target_h = 175
-            ratio = target_h / float(right_img.height or 1)
-            target_w = max(1, int(right_img.width * ratio))
-            right_resized = right_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
-            canvas.paste(right_resized, (max(0, 1920 - target_w), 18), right_resized)
+        try:
+            right_path = file_path('correspondence/static/src/img/logo-derecha.png')
+            if right_path and os.path.exists(right_path):
+                right_img = Image.open(right_path).convert("RGBA")
+                target_h = 148
+                ratio = target_h / float(right_img.height or 1)
+                target_w = max(1, int(right_img.width * ratio))
+                right_resized = right_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+                canvas.paste(right_resized, (max(0, 1920 - target_w), 26), right_resized)
+        except Exception:
+            pass
 
         out = io.BytesIO()
         canvas.convert("RGB").save(out, format="PNG")
@@ -755,56 +762,144 @@ class correspondence_document(models.Model):
     def _build_footer_png_bytes(self):
         """
         Compone en memoria la imagen del pie de página institucional (1920x405 PNG)
-        combinando el cintillo ondas (footer.png), el código QR de verificación y los datos de contacto.
+        idéntica al PDF QWeb: cintillo de ondas (footer.png), tarjeta QR blanca redondeada,
+        íconos circulares negros (teléfono, Instagram, Facebook, TikTok, YouTube, ubicación),
+        textos de contacto dentro de la onda amarilla y pastilla blanca 'Página X de Y' a la derecha.
         """
         canvas = Image.new("RGBA", (1920, 405), (255, 255, 255, 255))
-        footer_path = get_module_resource('correspondence', 'static/src/img', 'footer.png')
-        if footer_path and os.path.exists(footer_path):
-            f_img = Image.open(footer_path).convert("RGBA").resize((1920, 405), Image.Resampling.LANCZOS)
-            canvas.paste(f_img, (0, 0), f_img)
+        try:
+            footer_path = file_path('correspondence/static/src/img/footer.png')
+            if footer_path and os.path.exists(footer_path):
+                f_img = Image.open(footer_path).convert("RGBA").resize((1920, 405), Image.Resampling.LANCZOS)
+                canvas.paste(f_img, (0, 0), f_img)
+        except Exception:
+            pass
 
         draw = ImageDraw.Draw(canvas)
         qr_data_uri = self.get_qr_code_url()
         if qr_data_uri and "," in qr_data_uri:
             try:
                 qr_raw = base64.b64decode(qr_data_uri.split(",", 1)[1])
-                qr_img = Image.open(io.BytesIO(qr_raw)).convert("RGBA").resize((185, 185), Image.Resampling.LANCZOS)
-                draw.rounded_rectangle([(42, 190), (247, 395)], radius=20, fill=(255, 255, 255, 255))
-                canvas.paste(qr_img, (52, 200), qr_img)
+                qr_img = Image.open(io.BytesIO(qr_raw)).convert("RGBA").resize((164, 164), Image.Resampling.LANCZOS)
+                draw.rounded_rectangle([(52, 200), (236, 384)], radius=22, fill=(255, 255, 255, 255))
+                canvas.paste(qr_img, (62, 210), qr_img)
             except Exception:
                 pass
 
         font_bold = None
-        font_small = None
+        font_addr = None
+        font_page = None
+        font_icon = None
         for font_candidate in (
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
             "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
         ):
             if os.path.exists(font_candidate):
                 try:
-                    font_bold = ImageFont.truetype(font_candidate, 24)
-                    font_small = ImageFont.truetype(font_candidate, 20)
+                    font_bold = ImageFont.truetype(font_candidate, 18)
+                    font_addr = ImageFont.truetype(font_candidate, 14)
+                    font_page = ImageFont.truetype(font_candidate, 18)
+                    font_icon = ImageFont.truetype(font_candidate, 15)
                     break
                 except Exception:
                     pass
         if font_bold is None:
             font_bold = ImageFont.load_default()
-            font_small = ImageFont.load_default()
+            font_addr = ImageFont.load_default()
+            font_page = ImageFont.load_default()
+            font_icon = ImageFont.load_default()
 
-        draw.text((280, 242), "Tel: 0212-5072911 ext 8049", fill=(0, 0, 0, 255), font=font_bold)
-        draw.text((280, 280), "Redes: @cenipave", fill=(0, 0, 0, 255), font=font_bold)
+        # Fila 1: Ícono circular de Teléfono + número
+        cx1, cy1 = 256, 268
+        draw.ellipse([(cx1, cy1), (cx1 + 26, cy1 + 26)], fill=(0, 0, 0, 255))
+        draw.arc([(cx1 + 6, cy1 + 6), (cx1 + 20, cy1 + 20)], start=110, end=340, fill=(255, 255, 255, 255), width=3)
+        draw.text((cx1 + 34, cy1 + 3), "0212-5072911 ext 8049", fill=(0, 0, 0, 255), font=font_bold)
+
+        # Fila 2: 4 Íconos circulares de Redes Sociales (Instagram, Facebook, TikTok, YouTube) + @cenipave
+        cy2 = 302
+        # 1. Instagram
+        ix1 = 256
+        draw.ellipse([(ix1, cy2), (ix1 + 26, cy2 + 26)], fill=(0, 0, 0, 255))
+        draw.rounded_rectangle([(ix1 + 6, cy2 + 6), (ix1 + 20, cy2 + 20)], radius=4, outline=(255, 255, 255, 255), width=2)
+        draw.ellipse([(ix1 + 10, cy2 + 10), (ix1 + 16, cy2 + 16)], outline=(255, 255, 255, 255), width=2)
+        # 2. Facebook
+        ix2 = 286
+        draw.ellipse([(ix2, cy2), (ix2 + 26, cy2 + 26)], fill=(0, 0, 0, 255))
+        draw.text((ix2 + 9, cy2 + 4), "f", fill=(255, 255, 255, 255), font=font_icon)
+        # 3. TikTok
+        ix3 = 316
+        draw.ellipse([(ix3, cy2), (ix3 + 26, cy2 + 26)], fill=(0, 0, 0, 255))
+        draw.line([(ix3 + 14, cy2 + 7), (ix3 + 14, cy2 + 18)], fill=(255, 255, 255, 255), width=2)
+        draw.ellipse([(ix3 + 9, cy2 + 15), (ix3 + 14, cy2 + 20)], fill=(255, 255, 255, 255))
+        draw.arc([(ix3 + 14, cy2 + 6), (ix3 + 20, cy2 + 12)], start=0, end=120, fill=(255, 255, 255, 255), width=2)
+        # 4. YouTube
+        ix4 = 346
+        draw.ellipse([(ix4, cy2), (ix4 + 26, cy2 + 26)], fill=(0, 0, 0, 255))
+        draw.polygon([(ix4 + 10, cy2 + 8), (ix4 + 10, cy2 + 18), (ix4 + 19, cy2 + 13)], fill=(255, 255, 255, 255))
+        draw.text((ix4 + 34, cy2 + 3), "@cenipave", fill=(0, 0, 0, 255), font=font_bold)
+
+        # Fila 3: Ícono de Ubicación + Dirección en 2 líneas dentro de la franja amarilla
+        cy3 = 338
+        draw.ellipse([(260, cy3 + 2), (278, cy3 + 20)], outline=(0, 0, 0, 255), width=3)
+        draw.polygon([(261, cy3 + 15), (277, cy3 + 15), (269, cy3 + 27)], fill=(0, 0, 0, 255))
+        draw.ellipse([(266, cy3 + 8), (272, cy3 + 14)], fill=(255, 210, 0, 255))
         draw.text(
-            (280, 320),
-            "Caracas, Dto. Metropolitano, Municipio Libertador, Av. Lecuna,",
+            (288, cy3),
+            "Caracas, Dto. Metropolitano, Municipio Libertador, Av. Lecuna, Parque",
             fill=(0, 0, 0, 255),
-            font=font_small,
+            font=font_addr,
         )
         draw.text(
-            (280, 348),
-            "Parque Central, Torre Este, Piso 22",
+            (288, cy3 + 18),
+            "Central, Torre Este, Piso 22",
             fill=(0, 0, 0, 255),
-            font=font_small,
+            font=font_addr,
         )
+
+        # Pastilla de Numeración de Página en esquina inferior derecha (idéntica al PDF)
+        if self.show_page_numbers:
+            total_pg = self.manual_total_pages if (self.manual_total_pages and self.manual_total_pages > 0) else (2 if (self.tiene_anexos and self.anexos_html) else 1)
+            pg_label = f"Página 1 de {total_pg}"
+            draw.rounded_rectangle([(1620, 344), (1798, 384)], radius=12, fill=(255, 255, 255, 242))
+            draw.text((1642, 353), pg_label, fill=(0, 32, 96, 255), font=font_page)
+
+        out = io.BytesIO()
+        canvas.convert("RGB").save(out, format="PNG")
+        return out.getvalue()
+
+    def _build_signature_png_bytes(self):
+        """
+        Compone en memoria el bloque visual de Sello (izquierda) y Firma (derecha) del Director
+        (1080x290 PNG) para incrustarlo justo encima del nombre del firmante, igual que en el PDF.
+        Retorna None si el departamento no tiene ni firma ni sello cargados.
+        """
+        mgr = self.send_department_id.manager_id
+        stamp_b64 = mgr.director_stamp if mgr else False
+        sig_b64 = mgr.director_signature if mgr else False
+        if not stamp_b64 and not sig_b64:
+            return None
+
+        canvas = Image.new("RGBA", (1080, 290), (255, 255, 255, 255))
+        if stamp_b64:
+            try:
+                s_img = Image.open(io.BytesIO(base64.b64decode(stamp_b64))).convert("RGBA")
+                target_h = 270
+                ratio = target_h / float(s_img.height or 1)
+                target_w = max(1, int(s_img.width * ratio))
+                s_res = s_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+                canvas.paste(s_res, (max(0, 270 - target_w // 2), 10), s_res)
+            except Exception:
+                pass
+        if sig_b64:
+            try:
+                g_img = Image.open(io.BytesIO(base64.b64decode(sig_b64))).convert("RGBA")
+                target_h = 260
+                ratio = target_h / float(g_img.height or 1)
+                target_w = max(1, int(g_img.width * ratio))
+                g_res = g_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+                canvas.paste(g_res, (max(540, 810 - target_w // 2), 15), g_res)
+            except Exception:
+                pass
 
         out = io.BytesIO()
         canvas.convert("RGB").save(out, format="PNG")
@@ -812,14 +907,15 @@ class correspondence_document(models.Model):
 
     def _build_docx_bytes(self):
         """
-        Construye en memoria un archivo Word (.docx) OpenXML nativo con el formato
-        oficial CENIPA (Encabezado y Pie de página con imágenes, Georama 11pt, azul
-        institucional #002060, destinatarios en mayúscula, tablas estilizadas, firma,
+        Construye en memoria un archivo Word (.docx) OpenXML nativo con paridad visual 1:1
+        respecto al PDF oficial CENIPA (Encabezado a 10mm del borde, Pie de página sangrado
+        completo con ondas/QR/íconos/pastilla de página, fila de correlativo y fecha,
+        destinatarios en azul #002060, cuerpo Georama 11pt, imagen de sello+firma, Gaceta,
         sección Con Copia y salto de página para Anexos).
         """
         self.ensure_one()
 
-        def make_p(text, bold=False, italic=False, underline=False, color="000000", sz=22, align="left", after=60, before=0):
+        def make_p(text, bold=False, italic=False, underline=False, color="000000", sz=22, align="left", after=60, before=0, left_ind=0, right_ind=0):
             rpr = [
                 '<w:rFonts w:ascii="Georama" w:hAnsi="Georama" w:cs="Georama"/>',
                 f'<w:sz w:val="{sz}"/><w:szCs w:val="{sz}"/>',
@@ -831,78 +927,12 @@ class correspondence_document(models.Model):
                 rpr.append('<w:i/>')
             if underline:
                 rpr.append('<w:u w:val="single"/>')
+            ind_xml = f'<w:ind w:left="{left_ind}" w:right="{right_ind}"/>' if (left_ind or right_ind) else ''
             return (
                 f'<w:p><w:pPr><w:spacing w:before="{before}" w:after="{after}" w:line="240" w:lineRule="auto"/>'
-                f'<w:jc w:val="{align}"/></w:pPr>'
+                f'{ind_xml}<w:jc w:val="{align}"/></w:pPr>'
                 f'<w:r><w:rPr>{"".join(rpr)}</w:rPr><w:t xml:space="preserve">{escape(str(text or ""))}</w:t></w:r></w:p>'
             )
-
-        body_parts = []
-        is_oficio = 'OFI' in (self.correspondence_type.prefix or '').upper() or 'OFICIO' in (self.correspondence_type.name or '').upper()
-
-        # 1. Correlativo y Fecha
-        body_parts.append(make_p(self.correlative or '', bold=True, color="002060", sz=26, align="left", after=40))
-        if is_oficio:
-            body_parts.append(make_p(self.date_formatted_spanish_long or '', bold=True, color="000000", sz=22, align="right", after=240))
-            # Vocativo y Destinatarios en Azul Institucional (#002060) y Mayúsculas
-            body_parts.append(make_p(self.get_recipient_treatment_label(), bold=True, color="000000", sz=22, align="left", after=60))
-            for rec in self.get_formatted_recipients_list():
-                if rec.get('name'):
-                    body_parts.append(make_p(rec['name'], bold=True, color="002060", sz=22, align="left", after=20))
-                if rec.get('job'):
-                    body_parts.append(make_p(rec['job'], bold=True, color="002060", sz=22, align="left", after=20))
-                if rec.get('institution'):
-                    body_parts.append(make_p(rec['institution'], bold=True, color="002060", sz=22, align="left", after=80))
-            body_parts.append(make_p(self.get_recipient_closing_label(), bold=True, color="000000", sz=22, align="left", after=240))
-        else:
-            doc_title = (self.correspondence_type.name or 'MEMORANDO').upper()
-            body_parts.append(make_p(doc_title, bold=True, underline=True, color="002060", sz=26, align="center", after=180))
-            mgr = self.send_department_id.manager_id
-            de_line = f"DE: {(mgr.name if mgr else self.send_department_id.name or '').upper()} - {(mgr.job_id.name if (mgr and mgr.job_id) else self.send_department_id.name or '').upper()}"
-            body_parts.append(make_p(de_line, bold=True, color="000000", sz=22, align="left", after=60))
-            rec_names = [f"{r['name']} ({r['job']})" for r in self.get_formatted_recipients_list()]
-            para_line = f"PARA: {', '.join(rec_names) if rec_names else 'TODO EL PERSONAL'}"
-            body_parts.append(make_p(para_line, bold=True, color="000000", sz=22, align="left", after=60))
-            body_parts.append(make_p(f"ASUNTO: {(self.name or '').upper()}", bold=True, color="000000", sz=22, align="left", after=60))
-            body_parts.append(make_p(f"FECHA: {self.date_formatted_spanish or ''}", bold=True, color="000000", sz=22, align="left", after=240))
-
-        # 2. Cuerpo del Documento (con Saludo y Despedida Fijos)
-        body_parts.append(self._html_to_ooxml_elements(self.get_full_body_html()))
-
-        # 3. Bloque de Firma
-        mgr = self.send_department_id.manager_id
-        signer_name = (mgr.name if mgr else (self.author_id.name if not is_oficio else "ERIC RICARDO MARTÍNEZ GÓMEZ")).upper()
-        signer_job = (mgr.job_id.name if (mgr and mgr.job_id) else (self.send_department_id.name if not is_oficio else "DIRECTOR EJECUTIVO")).upper()
-        body_parts.append(make_p(signer_name, bold=True, color="002060", sz=24, align="center", before=360, after=20))
-        body_parts.append(make_p(signer_job, bold=True, color="002060", sz=20, align="center", after=20))
-        body_parts.append(make_p("CENTRO NACIONAL DE INVESTIGACIÓN DE PESCA Y ACUICULTURA (CENIPA)", bold=True, color="002060", sz=20, align="center", after=40))
-        if is_oficio:
-            gaceta_txt = (
-                "Decreto N° 4.807, publicado en la Gaceta Oficial de la República Bolivariana de Venezuela N° 42.634 "
-                "de fecha 23 de mayo de 2023. Delegación atribuida en el artículo 1, numeral 2 Resolución DM/N° 005-24 "
-                "publicada en la Gaceta Oficial de la República Bolivariana de Venezuela N° 42.942 de fecha 15 de agosto de 2.024"
-            )
-            body_parts.append(make_p(gaceta_txt, bold=False, color="000000", sz=16, align="center", after=160))
-
-        # 4. Bloque Con Copia (C.c.)
-        cc_items = self.get_formatted_cc_list()
-        if cc_items:
-            body_parts.append(make_p("C.c.:", bold=True, color="000000", sz=18, align="left", before=120, after=20))
-            for cc in cc_items:
-                cc_line = " - ".join([x for x in (cc.get('name'), cc.get('job'), cc.get('institution')) if x])
-                body_parts.append(make_p(cc_line, bold=True, color="002060", sz=18, align="left", after=20))
-
-        # 5. Iniciales
-        body_parts.append(make_p(self.author_initials or '', italic=True, color="000000", sz=18, align="left", before=160, after=120))
-
-        # 6. Pestaña de Anexos (Salto de página posterior a la firma)
-        if self.tiene_anexos and self.anexos_html:
-            body_parts.append('<w:p><w:r><w:br w:type="page"/></w:r></w:p>')
-            body_parts.append(make_p(f"ANEXO AL DOCUMENTO: {self.correlative or ''}", bold=True, color="002060", sz=24, align="left", after=160))
-            body_parts.append(self._html_to_ooxml_elements(self.anexos_html))
-
-        header_png = self._build_header_png_bytes()
-        footer_png = self._build_footer_png_bytes()
 
         def make_drawing_xml(rel_id, doc_pr_id, name, cx, cy):
             return (
@@ -924,42 +954,182 @@ class correspondence_document(models.Model):
                 '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing>'
             )
 
-        header_drawing = make_drawing_xml("rIdHdrImg1", 101, "HeaderBanner", 6217920, 680085)
+        no_borders_xml = (
+            '<w:tblBorders>'
+            '<w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+            '<w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+            '<w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+            '<w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+            '<w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+            '<w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+            '</w:tblBorders>'
+        )
+
+        body_parts = []
+        is_oficio = 'OFI' in (self.correspondence_type.prefix or '').upper() or 'OFICIO' in (self.correspondence_type.name or '').upper()
+        is_memo = 'MEMO' in (self.correspondence_type.prefix or '').upper() or 'MEMORANDO' in (self.correspondence_type.name or '').upper()
+
+        # 1. Encabezado de Documento (Oficio vs Memorando/Circular/Informe)
+        if is_oficio:
+            # Correlativo (izquierda) y Fecha (derecha) en la MISMA fila horizontal, idéntico al PDF
+            corr_date_tbl = (
+                f'<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/>{no_borders_xml}</w:tblPr>'
+                '<w:tr>'
+                f'<w:tc><w:tcPr><w:tcW w:w="2500" w:type="pct"/></w:tcPr>'
+                f'{make_p(self.correlative or "", bold=True, color="002060", sz=26, align="left", after=0)}</w:tc>'
+                f'<w:tc><w:tcPr><w:tcW w:w="2500" w:type="pct"/></w:tcPr>'
+                f'{make_p(self.date_formatted_spanish_long or "", bold=True, color="000000", sz=22, align="right", after=0)}</w:tc>'
+                '</w:tr></w:tbl>'
+                '<w:p><w:pPr><w:spacing w:before="0" w:after="280"/></w:pPr></w:p>'
+            )
+            body_parts.append(corr_date_tbl)
+
+            # Vocativo y Destinatarios en Azul Institucional (#002060) y Mayúsculas
+            body_parts.append(make_p(self.get_recipient_treatment_label(), bold=True, color="000000", sz=22, align="left", after=40))
+            recs = self.get_formatted_recipients_list()
+            for idx, rec in enumerate(recs):
+                is_last = (idx == len(recs) - 1)
+                if rec.get('name'):
+                    body_parts.append(make_p(rec['name'], bold=True, color="002060", sz=22, align="left", after=20))
+                if rec.get('job'):
+                    body_parts.append(make_p(rec['job'], bold=True, color="002060", sz=22, align="left", after=20))
+                if rec.get('institution'):
+                    body_parts.append(make_p(rec['institution'], bold=True, color="002060", sz=22, align="left", after=(40 if is_last else 100)))
+            body_parts.append(make_p(self.get_recipient_closing_label(), bold=True, color="000000", sz=22, align="left", before=20, after=280))
+        else:
+            body_parts.append(make_p(self.correlative or '', bold=True, color="002060", sz=26, align="left", after=60))
+            doc_title = (self.correspondence_type.name or 'MEMORANDO').upper()
+            body_parts.append(make_p(doc_title, bold=True, underline=True, color="002060", sz=26, align="center", after=180))
+
+            mgr = self.send_department_id.manager_id
+            de_name = (mgr.name if mgr else '').strip().upper()
+            de_job = (mgr.job_id.name if (mgr and mgr.job_id) else (self.send_department_id.name or '')).strip().upper()
+            de_cell_p = []
+            if de_name:
+                de_cell_p.append(make_p(de_name, bold=True, color="000000", sz=22, align="left", after=10))
+            de_cell_p.append(make_p(de_job, bold=True, color="000000", sz=22, align="left", after=80))
+
+            para_cell_p = []
+            recs = self.get_formatted_recipients_list()
+            if recs:
+                for rec in recs:
+                    if rec.get('name'):
+                        para_cell_p.append(make_p(rec['name'], bold=True, color="000000", sz=22, align="left", after=10))
+                    if rec.get('job'):
+                        para_cell_p.append(make_p(rec['job'], bold=True, color="000000", sz=22, align="left", after=60))
+            else:
+                para_cell_p.append(make_p("TODO EL PERSONAL", bold=True, color="000000", sz=22, align="left", after=80))
+
+            def make_meta_row(label_txt, right_paragraphs_xml):
+                return (
+                    '<w:tr>'
+                    f'<w:tc><w:tcPr><w:tcW w:w="750" w:type="pct"/></w:tcPr>'
+                    f'{make_p(label_txt, bold=True, color="000000", sz=22, align="left", after=80)}</w:tc>'
+                    f'<w:tc><w:tcPr><w:tcW w:w="4250" w:type="pct"/></w:tcPr>'
+                    f'{"".join(right_paragraphs_xml)}</w:tc>'
+                    '</w:tr>'
+                )
+
+            rows_meta = []
+            if is_memo:
+                rows_meta.append(make_meta_row("DE:", de_cell_p))
+                rows_meta.append(make_meta_row("PARA:", para_cell_p))
+            else:
+                rows_meta.append(make_meta_row("PARA:", para_cell_p))
+                rows_meta.append(make_meta_row("DE:", de_cell_p))
+            rows_meta.append(make_meta_row("ASUNTO:", [make_p((self.name or '').upper(), bold=True, color="000000", sz=22, align="left", after=80)]))
+            rows_meta.append(make_meta_row("FECHA:", [make_p(self.date_formatted_spanish or '', bold=True, color="000000", sz=22, align="left", after=80)]))
+
+            meta_tbl = (
+                f'<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/>{no_borders_xml}</w:tblPr>'
+                f'{"".join(rows_meta)}</w:tbl>'
+                '<w:p><w:pPr><w:spacing w:before="0" w:after="200"/></w:pPr></w:p>'
+            )
+            body_parts.append(meta_tbl)
+
+        # 2. Cuerpo del Documento (con Saludo y Despedida Fijos)
+        body_parts.append(self._html_to_ooxml_elements(self.get_full_body_html()))
+
+        # 3. Bloque de Firma y Sello (con Imagen combinada de Sello + Firma igual que en el PDF)
+        sig_png = self._build_signature_png_bytes()
+        if sig_png:
+            sig_drawing = make_drawing_xml("rIdSigImg1", 103, "SignatureStamp", 4389120, 1178560)
+            body_parts.append(
+                f'<w:p><w:pPr><w:spacing w:before="200" w:after="40"/><w:jc w:val="center"/></w:pPr>'
+                f'<w:r>{sig_drawing}</w:r></w:p>'
+            )
+            before_signer = 0
+        else:
+            before_signer = 480
+
+        mgr = self.send_department_id.manager_id
+        signer_name = (mgr.name if mgr else (self.author_id.name if not is_oficio else "ERIC RICARDO MARTÍNEZ GÓMEZ")).upper()
+        signer_job = (mgr.job_id.name if (mgr and mgr.job_id) else (self.send_department_id.name if not is_oficio else "DIRECTOR EJECUTIVO")).upper()
+        body_parts.append(make_p(signer_name, bold=True, color="002060", sz=(22 if is_oficio else 24), align="center", before=before_signer, after=20))
+        body_parts.append(make_p(signer_job, bold=True, color="002060", sz=20, align="center", after=20))
+        body_parts.append(make_p("CENTRO NACIONAL DE INVESTIGACIÓN DE PESCA Y ACUICULTURA (CENIPA)", bold=True, color="002060", sz=20, align="center", after=60))
+        if is_oficio:
+            gaceta_txt = (
+                "Decreto N° 4.807, publicado en la Gaceta Oficial de la República Bolivariana de Venezuela N° 42.634 "
+                "de fecha 23 de mayo de 2023. Delegación atribuida en el artículo 1, numeral 2 Resolución DM/N° 005-24 "
+                "publicada en la Gaceta Oficial de la República Bolivariana de Venezuela N° 42.942 de fecha 15 de agosto de 2.024"
+            )
+            body_parts.append(make_p(gaceta_txt, bold=False, color="000000", sz=16, align="center", after=160, left_ind=900, right_ind=900))
+        elif mgr and mgr.director_description:
+            desc_plain = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', unescape(str(mgr.director_description)))).strip()
+            if desc_plain:
+                body_parts.append(make_p(desc_plain, bold=False, color="000000", sz=16, align="center", after=160, left_ind=900, right_ind=900))
+
+        # 4. Bloque Con Copia (C.c.)
+        cc_items = self.get_formatted_cc_list()
+        if cc_items:
+            body_parts.append(make_p("C.c.:", bold=True, color="000000", sz=18, align="left", before=120, after=20))
+            for cc in cc_items:
+                cc_line = " — ".join([x for x in (cc.get('name'), cc.get('job')) if x])
+                if cc.get('institution'):
+                    cc_line += f" ({cc['institution']})"
+                body_parts.append(make_p(cc_line, bold=True, color="002060", sz=18, align="left", after=20))
+
+        # 5. Iniciales
+        body_parts.append(make_p(self.author_initials or '', italic=True, color="000000", sz=18, align="left", before=160, after=120))
+
+        # 6. Pestaña de Anexos (Salto de página posterior a la firma)
+        if self.tiene_anexos and self.anexos_html:
+            body_parts.append('<w:p><w:r><w:br w:type="page"/></w:r></w:p>')
+            anexo_title = f"ANEXO AL DOCUMENTO: {self.correlative or ''}"
+            anexo_hdr_tbl = (
+                f'<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/>{no_borders_xml}</w:tblPr>'
+                '<w:tr>'
+                f'<w:tc><w:tcPr><w:tcW w:w="3250" w:type="pct"/></w:tcPr>'
+                f'{make_p(anexo_title, bold=True, color="002060", sz=24, align="left", after=0)}</w:tc>'
+                f'<w:tc><w:tcPr><w:tcW w:w="1750" w:type="pct"/></w:tcPr>'
+                f'{make_p(self.date_formatted_spanish or "", bold=True, color="000000", sz=20, align="right", after=0)}</w:tc>'
+                '</w:tr></w:tbl>'
+                '<w:p><w:pPr><w:spacing w:before="0" w:after="200"/></w:pPr></w:p>'
+            )
+            body_parts.append(anexo_hdr_tbl)
+            body_parts.append(self._html_to_ooxml_elements(self.anexos_html))
+
+        header_png = self._build_header_png_bytes()
+        footer_png = self._build_footer_png_bytes()
+
+        # Header a 10mm de cada borde lateral (ancho 195.9mm = 7050060 EMUs, sangría -873 twips)
+        header_drawing = make_drawing_xml("rIdHdrImg1", 101, "HeaderBanner", 7050060, 734380)
         header_xml = (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             '<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
             'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-            f'<w:p><w:pPr><w:spacing w:before="0" w:after="80"/><w:jc w:val="center"/></w:pPr><w:r>{header_drawing}</w:r></w:p>'
+            f'<w:p><w:pPr><w:spacing w:before="0" w:after="120"/><w:ind w:left="-873" w:right="-873"/><w:jc w:val="center"/></w:pPr><w:r>{header_drawing}</w:r></w:p>'
             '</w:hdr>'
         )
 
-        page_num_xml = ""
-        if self.show_page_numbers:
-            rpr_pg = (
-                '<w:rPr><w:rFonts w:ascii="Georama" w:hAnsi="Georama" w:cs="Georama"/>'
-                '<w:b/><w:sz w:val="17"/><w:szCs w:val="17"/><w:color w:val="002060"/></w:rPr>'
-            )
-            if self.manual_total_pages and self.manual_total_pages > 0:
-                total_part = f'<w:r>{rpr_pg}<w:t xml:space="preserve"> de {self.manual_total_pages}</w:t></w:r>'
-            else:
-                total_part = (
-                    f'<w:r>{rpr_pg}<w:t xml:space="preserve"> de </w:t></w:r>'
-                    f'<w:fldSimple w:instr="NUMPAGES"><w:r>{rpr_pg}<w:t>1</w:t></w:r></w:fldSimple>'
-                )
-            page_num_xml = (
-                '<w:p><w:pPr><w:spacing w:before="0" w:after="20"/><w:jc w:val="right"/></w:pPr>'
-                f'<w:r>{rpr_pg}<w:t xml:space="preserve">Página </w:t></w:r>'
-                f'<w:fldSimple w:instr="PAGE"><w:r>{rpr_pg}<w:t>1</w:t></w:r></w:fldSimple>'
-                f'{total_part}</w:p>'
-            )
-
-        footer_drawing = make_drawing_xml("rIdFtrImg1", 102, "FooterBanner", 6217920, 1311592)
+        # Footer sangrado 100% de borde a borde (ancho total de página 215.9mm = 7772400 EMUs, sangría -1440 twips, w:footer="0")
+        footer_drawing = make_drawing_xml("rIdFtrImg1", 102, "FooterBanner", 7772400, 1639490)
         footer_xml = (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             '<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
             'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-            f'{page_num_xml}'
-            f'<w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:jc w:val="center"/></w:pPr><w:r>{footer_drawing}</w:r></w:p>'
+            f'<w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:ind w:left="-1440" w:right="-1440"/><w:jc w:val="center"/></w:pPr><w:r>{footer_drawing}</w:r></w:p>'
             '</w:ftr>'
         )
 
@@ -969,7 +1139,7 @@ class correspondence_document(models.Model):
             '<w:headerReference w:type="default" r:id="rIdHeader1"/>'
             '<w:footerReference w:type="default" r:id="rIdFooter1"/>'
             f'<w:pgSz w:w="12240" w:h="{page_h}"/>'
-            '<w:pgMar w:top="1758" w:right="1440" w:bottom="2300" w:left="1440" w:header="360" w:footer="240" w:gutter="0"/>'
+            '<w:pgMar w:top="1758" w:right="1440" w:bottom="2608" w:left="1440" w:header="340" w:footer="0" w:gutter="0"/>'
             '</w:sectPr>'
         )
 
@@ -999,11 +1169,16 @@ class correspondence_document(models.Model):
             '</Relationships>'
         )
 
+        sig_rel_entry = (
+            '<Relationship Id="rIdSigImg1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/signature_banner.png"/>'
+            if sig_png else ''
+        )
         doc_rels_xml = (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
             '<Relationship Id="rIdHeader1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>'
             '<Relationship Id="rIdFooter1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>'
+            f'{sig_rel_entry}'
             '</Relationships>'
         )
 
@@ -1032,6 +1207,8 @@ class correspondence_document(models.Model):
             zf.writestr('word/footer1.xml', footer_xml.encode('utf-8'))
             zf.writestr('word/media/header_banner.png', header_png)
             zf.writestr('word/media/footer_banner.png', footer_png)
+            if sig_png:
+                zf.writestr('word/media/signature_banner.png', sig_png)
             zf.writestr('word/document.xml', document_xml.encode('utf-8'))
         return buf.getvalue()
 
